@@ -22,7 +22,6 @@ scripts/ua/            the Ukraine pipeline
   ua_region.py <slug>  one oblast -> web_ua/<slug>/: region.json, tiles + overview + addresses + 50 m relief in 12 km packs,
                        400 m relief (dem.bin.wasm), 100 m land cover (lc.png)
   ua_bundle.py <slug>  merge 2x2 packs into one file (fewer files to host)
-  ua_sea.py <slug>     paint the sea into an existing land cover (ua_region.py already does this)
   build_region_viewer.py <out_dir> [hub_url]   the oblast page from viewer_region_tpl.html
   ua_hub.py, build_hub.py                       the all-Ukraine map from hub_tpl.html
   ua_pubplan.py        split each oblast's files into upload batches

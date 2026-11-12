@@ -618,10 +618,12 @@ def main():
     LD = 100.0; lnx, lny = int((ox1 - ox0) / LD) + 1, int((oy1 - oy0) / LD) + 1
     im = Image.new('P', (lnx, lny), LCI['field']); dr = ImageDraw.Draw(im)
     px = lambda p: ((p[0] - ox0) / LD, (oy1 - p[1]) / LD)
+    land = Image.new('L', (lnx, lny), 0); dl = ImageDraw.Draw(land)      # mapped land areas: never sea, even at 0 m (Odesa's Peresyp, deltas)
     for kind, lc in LC_ORDER:
         for a in F['areas']:
             if a['kind'] == kind and len(a['outer']) >= 3:
-                dr.polygon([px(p) for p in a['outer']], fill=LCI[lc])
+                pts = [px(p) for p in a['outer']]
+                dr.polygon(pts, fill=LCI[lc]); dl.polygon(pts, fill=255)
     for w in F['water']:
         o = w['outer']
         if len(o) < 3: continue
@@ -635,7 +637,7 @@ def main():
     a = np.array(im); a[np.asarray(mask) == 0] = LCI['outside']
     # the sea (no polygons in OSM, only a coastline; the oblast border runs out into territorial waters): wherever the relief is below sea level
     hl = grid_heights(Pj, sample, ox0, oy1 - (lny - 1) * LD, LD, lnx, lny, raw=True)[::-1]
-    a[hl < 0.02] = LCI['water']          # the DEM is exactly 0 over the sea (no depths)
+    a[(hl < 0.02) & (np.asarray(land) == 0)] = LCI['water']          # the DEM is exactly 0 over the sea (no depths); mapped land stays land
     im = Image.fromarray(a, 'P'); im.putpalette(sum([[i * 16, i * 16, i * 16] for i in range(16)], []))
     im.save(os.path.join(out, 'lc.png'), optimize=True)
 
