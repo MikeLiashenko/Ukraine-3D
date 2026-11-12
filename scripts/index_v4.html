@@ -1,0 +1,1023 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Салтівка · 603</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-bleed 3D map; floating instrument panels pinned to the corners (title, views, building card). */
+:root {
+  --bg: #e9ecef;            /* concrete haze behind the canvas */
+  --panel: rgba(250, 251, 252, 0.90);
+  --panel-solid: #fafbfc;
+  --ink: #1d232b;
+  --muted: #5a6573;
+  --line: rgba(29, 35, 43, 0.12);
+  --accent: #2f6fd6;        /* Saltivska metro line blue */
+  --accent-ink: #ffffff;
+  --chip: #eef1f5;
+  --warn: #b5651d;
+  --shadow: 0 8px 28px rgba(20, 28, 40, 0.16);
+  --display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --body: "Onest", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161b; --panel: rgba(24, 29, 36, 0.88); --panel-solid: #181d24; --ink: #e8ecf1; --muted: #9aa5b3;
+  --line: rgba(232, 236, 241, 0.14); --accent: #5b93f0; --accent-ink: #0b1220; --chip: #232a33; --warn: #e3a35c;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #12161b; --panel: rgba(24, 29, 36, 0.88); --panel-solid: #181d24; --ink: #e8ecf1; --muted: #9aa5b3;
+  --line: rgba(232, 236, 241, 0.14); --accent: #5b93f0; --accent-ink: #0b1220; --chip: #232a33; --warn: #e3a35c;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45); color-scheme: dark; }
+
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+
+.panel { background: var(--panel); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); }
+
+#brand { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+  padding: 12px 14px; display: grid; gap: 4px; max-width: min(360px, calc(100vw - 32px)); }
+#brand h1 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 19px; letter-spacing: 0.01em; text-wrap: balance; }
+#brand h1 span { color: var(--accent); }
+#brand p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+#brand .coords { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.02em; }
+
+#dock .chips { display: contents; }
+#dock { position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px)); padding: 8px; display: flex; gap: 8px; flex-wrap: wrap;
+  justify-content: center; align-items: center; max-width: calc(100vw - 32px); }
+.group { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.sep { width: 1px; align-self: stretch; background: var(--line); }
+button, .tog { font: 500 12.5px/1 var(--body); color: var(--ink); background: var(--chip); border: 1px solid transparent;
+  border-radius: 7px; padding: 8px 10px; cursor: pointer; white-space: nowrap; }
+button:hover, .tog:hover { border-color: var(--line); }
+button:focus-visible, .tog:focus-within, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.on, .tog.on { background: var(--accent); color: var(--accent-ink); }
+.tog input { position: absolute; opacity: 0; pointer-events: none; }
+.tog { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.time { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.time label { font-size: 12px; color: var(--muted); }
+.time output { font-family: var(--mono); font-size: 12px; min-width: 40px; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 120px; accent-color: var(--accent); }
+
+#search { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  padding: 6px; width: min(300px, calc(100vw - 32px)); }
+#search input { width: 100%; box-sizing: border-box; font: 400 13px var(--body); color: var(--ink); background: var(--chip);
+  border: 1px solid transparent; border-radius: 7px; padding: 9px 10px; }
+#results { list-style: none; margin: 4px 0 0; padding: 0; max-height: 40vh; overflow: auto; }
+#results li button { width: 100%; text-align: left; background: transparent; padding: 8px 10px; display: flex; justify-content: space-between; gap: 8px; }
+#results li button:hover { background: var(--chip); }
+#results small { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+
+#card { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); top: calc(76px + env(safe-area-inset-top, 0px));
+  width: min(320px, calc(100vw - 32px)); padding: 14px; display: grid; gap: 12px; }
+#card h2 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 16px; line-height: 1.3; text-wrap: balance; }
+#card .close { position: absolute; top: 8px; right: 8px; padding: 6px 8px; background: transparent; }
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
+dt { color: var(--muted); font-size: 12px; }
+dd { margin: 0; font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.swatches { display: flex; gap: 8px; align-items: center; }
+.sw { width: 34px; height: 34px; border-radius: 7px; border: 1px solid var(--line); }
+.src { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.src b { color: var(--ink); font-weight: 600; }
+.edit { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.edit .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.edit input[type=color] { width: 44px; height: 34px; border: 1px solid var(--line); border-radius: 7px; background: var(--chip); padding: 2px; }
+.edit .presets { display: flex; gap: 5px; flex-wrap: wrap; }
+.edit .presets button { width: 24px; height: 24px; padding: 0; border-radius: 6px; border: 1px solid var(--line); }
+.primary { background: var(--accent); color: var(--accent-ink); }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.note.warn { color: var(--warn); }
+
+#loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); z-index: 5; }
+#loading div { display: grid; gap: 10px; justify-items: center; text-align: center; padding-inline: max(16px, env(safe-area-inset-left, 0px)); }
+#loading strong { font-family: var(--display); font-size: 18px; }
+#loading span { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+#compass { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; }
+#compass svg { width: 30px; height: 30px; }
+
+@media (max-width: 640px) {
+  /* phone: slim header + search on top, one compact control bar at the bottom, building card as a bottom sheet */
+  #brand { left: 8px; top: calc(8px + env(safe-area-inset-top, 0px)); padding: 8px 10px; gap: 2px; max-width: none; }
+  #brand h1 { font-size: 15px; } #brand p, #brand .coords { display: none; }
+  #search { top: calc(8px + env(safe-area-inset-top, 0px)); right: 8px; left: 170px; width: auto; padding: 4px; }
+  #search input { padding: 8px 9px; font-size: 16px; }   /* 16px: no auto-zoom on iOS */
+  #results { max-height: 45vh; }
+  #compass { bottom: auto; top: calc(62px + env(safe-area-inset-top, 0px)); left: 8px; width: 40px; height: 40px; }
+  #dock { left: 8px; right: 8px; transform: none; max-width: none; bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: 6px; gap: 6px; flex-direction: column; align-items: stretch; }
+  #dock .sep { display: none; }
+  #dock > * { min-width: 0; max-width: 100%; }
+  #dock .group { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  #dock .group::-webkit-scrollbar { display: none; }
+  #dock .chips { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  #dock .chips::-webkit-scrollbar { display: none; }
+  #dock .chips .group { overflow: visible; }
+  button, .tog { padding: 9px 11px; font-size: 13px; }
+  .time { padding: 2px 4px 0; }
+  .time input[type=range] { flex: 1; width: auto; min-width: 0; }
+  #card { left: 8px; right: 8px; width: auto; top: auto; bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+    max-height: 48vh; overflow: auto; padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="stage"></div>
+
+<div id="loading"><div><strong>Салтівка, 603</strong><span id="loadmsg">завантаження геометрії…</span></div></div>
+
+<header id="brand" class="panel">
+  <h1>Салтівка <span>603</span></h1>
+  <p>603-й мікрорайон, Харків. Будівлі, дороги, майданчики й паркани з OpenStreetMap; трава, ґрунт і бетон розкладені за типами поверхні зі знімка, дерева там, де на знімку крони. Натисніть на будинок, щоб побачити адресу й колір.</p>
+  <div class="coords">50.0004° N · 36.3472° E · 1 клітинка = 1 м</div>
+</header>
+
+<div id="search" class="panel">
+  <input id="q" type="search" placeholder="Адреса: Ювілейний 61Д…" autocomplete="off" aria-label="Пошук будинку за адресою">
+  <ul id="results"></ul>
+</div>
+
+<aside id="card" class="panel" hidden aria-live="polite">
+  <button class="close" id="closeCard" aria-label="Закрити">✕</button>
+  <h2 id="cAddr">—</h2>
+  <dl>
+    <dt>Тип</dt><dd id="cKind">—</dd>
+    <dt>Поверхів</dt><dd id="cLv">—</dd>
+    <dt>Висота</dt><dd id="cH">—</dd>
+    <dt>OSM</dt><dd id="cOsm">—</dd>
+  </dl>
+  <div class="swatches"><div class="sw" id="swF" title="Фасад"></div><div class="sw" id="swE" title="Торці"></div>
+    <p class="src" id="cSrc">—</p></div>
+  <div class="edit" id="editBox">
+    <div class="row"><input type="color" id="colF" aria-label="Колір фасаду"><span class="note">Фасад</span>
+      <input type="color" id="colE" aria-label="Колір торців"><span class="note">Торці</span></div>
+    <div class="presets" id="presets"></div>
+    <div class="row"><button class="primary" id="save">Зберегти колір</button><button id="reset">Скинути</button></div>
+    <p class="note" id="saveNote">Зміни бачать усі, хто відкриває цю сторінку. Я використаю їх для наступного рендеру.</p>
+  </div>
+</aside>
+
+<div id="compass" class="panel" title="Північ"><svg viewBox="0 0 30 30" aria-hidden="true"><g id="needle"><path d="M15 3 L19 15 L15 13 L11 15 Z" fill="var(--accent)"/><path d="M15 27 L19 15 L15 17 L11 15 Z" fill="var(--muted)"/></g><text x="15" y="2.5" text-anchor="middle" font-size="5" fill="var(--ink)" font-family="var(--mono)">N</text></svg></div>
+
+<nav id="dock" class="panel" aria-label="Керування">
+  <div class="chips">
+  <div class="group" id="views">
+    <button data-view="overview" class="on">Огляд</button>
+    <button data-view="towers">Вежі 61Д</button>
+    <button data-view="avenue">Ювілейний</button>
+    <button data-view="top">Згори</button>
+  </div>
+  <div class="sep"></div>
+  <div class="group">
+    <label class="tog on"><input type="checkbox" id="tTrees" checked>Дерева</label>
+    <label class="tog on"><input type="checkbox" id="tCars" checked>Авто</label>
+    <label class="tog on"><input type="checkbox" id="tShadow" checked>Тіні</label>
+    <label class="tog"><input type="checkbox" id="tBound">Межа 603</label>
+  </div>
+  </div>
+  <div class="sep"></div>
+  <div class="time"><label for="hour">Час</label><input type="range" id="hour" min="6" max="20.5" step="0.25" value="15"><output id="hourOut">15:00</output></div>
+</nav>
+
+<script>addEventListener('error',e=>{const m=document.getElementById('loadmsg');if(m)m.textContent='Помилка: '+e.message;});addEventListener('unhandledrejection',e=>{const m=document.getElementById('loadmsg');if(m)m.textContent='Помилка: '+(e.reason&&e.reason.message||e.reason);});</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+// phones and tablets: lower resolution, smaller shadow map, no AO, fewer trees, nearer car LOD, render only on change
+const MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
+
+const $ = (id) => document.getElementById(id);
+const msg = (t) => { $('loadmsg').textContent = t; };
+
+// ---------------------------------------------------------------- data
+async function loadBin(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + ' ' + r.status);
+  const buf = new Uint8Array(await r.arrayBuffer());
+  if (buf[0] === 0x1f && buf[1] === 0x8b) {
+    const ds = new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')));
+    return await ds.arrayBuffer();
+  }
+  return buf.buffer;
+}
+const TYPES = { float32: Float32Array, int16: Int16Array, uint8: Uint8Array, uint32: Uint32Array };
+
+msg('завантаження геометрії…');
+const [meta, raw] = await Promise.all([fetch('meta.json').then(r => r.json()), loadBin('city.bin.wasm')]);
+const H = meta.header;
+const arr = (name) => { const h = H[name]; return new TYPES[h.dtype](raw, h.offset, h.count); };
+const B = meta.buildings;
+
+// local metres (x east, y north, z up) -> three.js (x, y up, z south)
+function xyzToThree(src, scale = 1) {
+  const out = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i += 3) { out[i] = src[i] * scale; out[i + 1] = src[i + 2] * scale; out[i + 2] = -src[i + 1] * scale; }
+  return out;
+}
+
+// ---------------------------------------------------------------- renderer / scene
+msg('побудова сцени…');
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE || devicePixelRatio < 2, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(innerWidth < innerHeight ? 58 : 42, innerWidth / innerHeight, 2, 12000);   // wider in portrait
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 25; controls.maxDistance = 2600;
+controls.screenSpacePanning = false;
+
+const sky = new Sky(); sky.scale.setScalar(9000); scene.add(sky);
+const su = sky.material.uniforms;
+su.turbidity.value = 4.5; su.rayleigh.value = 1.4; su.mieCoefficient.value = 0.004; su.mieDirectionalG.value = 0.8;
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envScene = new THREE.Scene(); const envSky = new Sky(); envSky.scale.setScalar(9000); envScene.add(envSky);
+let envRT = null;
+
+const sun = new THREE.DirectionalLight(0xfff1df, 2.6);
+sun.castShadow = true;
+sun.shadow.mapSize.setScalar(MOBILE ? 2048 : 4096);
+Object.assign(sun.shadow.camera, { left: -760, right: 760, top: 760, bottom: -760, near: 10, far: 4000 });
+sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.08;
+const sunDir = new THREE.Vector3(0, 1, 0);
+scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight(0xc9dcf2, 0x56604a, 0.4); scene.add(hemi);
+scene.fog = new THREE.Fog(0xc7d2dc, 900, 2600);
+
+// shadow frustum follows the camera target: tight (sharp) when close, whole district when far
+let shadowR = 0;
+function fitShadow() {
+  const d = camera.position.distanceTo(controls.target);
+  const R = THREE.MathUtils.clamp(d * (MOBILE ? 0.7 : 0.85), 60, MOBILE ? 500 : 800);
+  const c = controls.target;
+  sun.target.position.set(c.x, 0, c.z); sun.position.copy(sun.target.position).addScaledVector(sunDir, 2500);
+  const sc = sun.shadow.camera; sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 100; sc.far = 5000; sc.updateProjectionMatrix();
+  sun.shadow.normalBias = 0.03 + R / 800 * 0.35;
+  sun.target.updateMatrixWorld(); shadowR = R;
+  renderer.shadowMap.needsUpdate = true;
+}
+let shadowDirty = true;
+controls.addEventListener('change', () => { shadowDirty = true; });
+
+// ---------------------------------------------------------------- ground + water
+const [gx0, gy0, gx1, gy1] = meta.ground;
+const loader = new THREE.TextureLoader();
+// surface-type mask (R bare ground, G concrete/asphalt yards, B mapped lawns), drawn with procedural materials
+const surfMask = await new Promise((res, rej) => loader.load('surface.png', res, undefined, rej));
+surfMask.colorSpace = THREE.NoColorSpace; surfMask.generateMipmaps = true; surfMask.minFilter = THREE.LinearMipmapLinearFilter;
+{
+  const g = new THREE.PlaneGeometry(9000, 9000); g.rotateX(-Math.PI / 2);
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96 });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uMask = { value: surfMask };
+    sh.uniforms.uG0 = { value: new THREE.Vector2(gx0, gy0) };
+    sh.uniforms.uGS = { value: new THREE.Vector2(gx1 - gx0, gy1 - gy0) };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGP;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uMask; uniform vec2 uG0; uniform vec2 uGS; varying vec3 vGP;\n' + SRGB)
+      .replace('#include <color_fragment>', /* glsl */`
+      vec2 p = vec2(vGP.x, -vGP.z);
+      float px = max(length(fwidth(p)), 1e-4);
+      float fine = 1.0 - smoothstep(0.015, 0.06, px), mid = 1.0 - smoothstep(0.1, 0.6, px);
+      vec2 uv = (p - uG0) / uGS;
+      float ins = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
+      vec3 mk = texture2D(uMask, clamp(uv, 0.0, 1.0)).rgb * ins;
+      float n1 = fbm(p * 0.35), n2 = fbm(p * 0.045 + 3.0), n3 = fbm(p * 0.9 + 7.0);
+      // grass: lush / dry / dark clumps, fine blade noise up close
+      vec3 gr = mix(toLin(vec3(0.34, 0.45, 0.19)), toLin(vec3(0.50, 0.49, 0.28)), smoothstep(0.45, 0.78, n2) * (1.0 - 0.7 * mk.b));
+      gr = mix(gr, toLin(vec3(0.21, 0.31, 0.12)), smoothstep(0.52, 0.82, n3) * 0.55);
+      gr *= 0.86 + 0.28 * vnoise(p * 5.0) * mid + 0.22 * fine * (hash12(floor(p * 28.0)) - 0.5);
+      // bare trampled ground with grass tufts
+      vec3 dt = toLin(vec3(0.52, 0.45, 0.35)) * (0.82 + 0.32 * fbm(p * 0.6)) * (1.0 + 0.18 * fine * (hash12(floor(p * 45.0)) - 0.5));
+      dt = mix(dt, gr, smoothstep(0.62, 0.8, vnoise(p * 1.7)) * 0.7);
+      // old concrete / asphalt yard surfaces
+      vec3 hd = toLin(vec3(0.47, 0.47, 0.45)) * (0.82 + 0.3 * fbm(p * 0.22));
+      hd *= 1.0 - 0.10 * mid * (1.0 - smoothstep(0.0, 0.012 + px * 0.5, abs(vnoise(p * 0.7 + 5.0) - 0.5))) * step(0.5, vnoise(p * 0.08));
+      float dA = smoothstep(0.30, 0.62, mk.r + (n1 - 0.5) * 0.5);
+      float hA = smoothstep(0.40, 0.70, mk.g + (n1 - 0.5) * 0.3);
+      vec3 c = mix(mix(gr, dt, dA), hd, hA);
+      diffuseColor.rgb = c;`);
+  };
+  const ground = new THREE.Mesh(g, m);
+  ground.position.set((gx0 + gx1) / 2, -0.05, -(gy0 + gy1) / 2); ground.receiveShadow = true; ground.renderOrder = -2; scene.add(ground);
+  const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr('water_pos')), 3));
+  wg.computeVertexNormals();
+  const water = new THREE.Mesh(wg, new THREE.MeshStandardMaterial({ color: 0x0d1d1a, roughness: 0.08, metalness: 0.2 }));
+  water.receiveShadow = true; scene.add(water);
+}
+
+// ---------------------------------------------------------------- buildings
+const selU = { value: -1 };
+const sunU = { value: new THREE.Vector3(0, 1, 0) };
+const SRGB = /* glsl */`vec3 toLin(vec3 c){ return pow(c, vec3(2.2)); }
+float hash13(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1, 0)), f.x), mix(hash12(i + vec2(0, 1)), hash12(i + vec2(1, 1)), f.x), f.y); }
+float fbm(vec2 p){ return 0.5 * vnoise(p) + 0.3 * vnoise(p * 2.13 + 7.1) + 0.2 * vnoise(p * 4.37 + 3.3); }
+float box2(vec2 p, vec2 a, vec2 b){ return step(a.x, p.x) * step(p.x, b.x) * step(a.y, p.y) * step(p.y, b.y); }
+// box-filtered coverage of [a,b] by a pixel of size px centred at x (exact anti-aliasing for thin bars)
+float cov1(float x, float a, float b, float px){ return clamp((min(x + px * 0.5, b) - max(x - px * 0.5, a)) / px, 0.0, 1.0); }
+float cov2(vec2 p, vec2 a, vec2 b, float px){ return cov1(p.x, a.x, b.x, px) * cov1(p.y, a.y, b.y, px); }
+// one glazed pane seen through its frame: q in metres from the lower-left corner of a w x h opening, px = metres per pixel
+vec3 paneColor(vec2 q, float w, float h, float r, float kind, vec3 frameC, float px, out float glassMask){
+  px = max(px, 1e-3); glassMask = 0.0;
+  if (kind > 3.5) {                                   // shop-front / curtain wall: 1.5 x 1.25 m aluminium grid
+    vec2 cell = vec2(1.5, 1.25), g = mod(q, cell);
+    float bar = max(cov1(g.x, 0.0, 0.05, px) + cov1(g.x, cell.x - 0.05, cell.x, px), cov1(g.y, 0.0, 0.06, px) + cov1(g.y, cell.y - 0.06, cell.y, px));
+    bar = max(bar, 1.0 - cov2(q, vec2(0.08), vec2(w - 0.08, h - 0.08), px));
+    float gl = clamp(1.0 - bar, 0.0, 1.0);
+    glassMask = gl;
+    vec3 refl = vec3(0.13, 0.17, 0.21) * (0.75 + 0.5 * hash12(floor(q / cell) + r * 97.0));
+    refl = mix(refl, vec3(0.30, 0.27, 0.22), step(q.y, 3.2) * step(0.5, fract(r * 3.3 + floor(q.x / 6.0) * 0.37)) * 0.6);   // lit shop interiors
+    return mix(frameC, refl, gl);
+  }
+  float fw = 0.065;
+  float n = w > 1.35 ? (r < 0.55 ? 2.0 : 3.0) : (w > 0.85 ? 2.0 : 1.0);
+  if (kind > 1.5) n = max(1.0, floor(w / 0.62 + 0.5));            // balcony glazing: narrow sashes
+  float sash = w / n, sx = mod(q.x, sash), dm = sx < sash * 0.5 ? sx : sx - sash;
+  float glass = cov2(q, vec2(fw), vec2(w - fw, h - fw), px);
+  glass *= 1.0 - cov1(dm, -0.03, 0.03, px) * step(0.5, n - 0.5) * step(fw, q.x) * step(q.x, w - fw);   // mullions
+  float old = step(0.72, fract(r * 13.7));
+  glass *= 1.0 - old * cov1(q.y, h - 0.45, h - 0.40, px) * step(q.x, sash);                               // fortochka transom
+  glassMask = glass;
+  // interior seen through the glass: dark room, tulle, curtains, blinds
+  float c = fract(r * 7.31), u = q.x / w;
+  float fine = 1.0 - smoothstep(0.0015, 0.005, px);
+  vec3 room = vec3(0.035, 0.038, 0.042) * (0.7 + 0.6 * fract(r * 3.7));
+  vec3 tulle = vec3(0.26, 0.255, 0.24) * (1.0 - 0.15 * fine * (0.5 + 0.5 * sin(q.x * 38.0 + r * 10.0)));
+  vec3 curt = toLin(vec3(0.55 + 0.25 * fract(r * 5.1), 0.45 + 0.2 * fract(r * 9.3), 0.35 + 0.15 * fract(r * 2.9))) * 0.45;
+  vec3 inside = room;
+  if (c < 0.30) inside = mix(room, tulle, 0.85);
+  else if (c < 0.52) inside = mix(mix(room, tulle, step(0.5, fract(r * 4.1)) * 0.8), curt, 1.0 - step(0.22, min(u, 1.0 - u)));
+  else if (c < 0.62) inside = mix(room, vec3(0.30, 0.29, 0.27), 0.8 - 0.2 * fine * step(0.5, fract(q.y * 18.0)));
+  return mix(frameC, inside * 0.75, glass);
+}`;
+
+
+// ---------------------------------------------------------------- road / pitch / playground surfaces
+// Layers are a few cm apart, so they are drawn in painter's order (sorted by height at export) without depth writes:
+// no z-fighting at any distance; everything else still depth-tests against the imagery plane below.
+const gndGeo = new THREE.BufferGeometry();
+gndGeo.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr('gnd_pos')), 3));
+gndGeo.setAttribute('color', new THREE.BufferAttribute(arr('gnd_col'), 3, true));
+gndGeo.setAttribute('pat', new THREE.BufferAttribute(new Float32Array(arr('gnd_pat')), 1));
+gndGeo.setIndex(new THREE.BufferAttribute(arr('gnd_idx'), 1));
+{ const n = new Float32Array(gndGeo.attributes.position.count * 3); for (let i = 1; i < n.length; i += 3) n[i] = 1; gndGeo.setAttribute('normal', new THREE.BufferAttribute(n, 3)); }
+const gndMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+gndMat.onBeforeCompile = (sh) => {
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute float pat; varying float vPat; varying vec3 vGP;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPat = pat; vGP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying float vPat; varying vec3 vGP; float gR;\n' + SRGB)
+    .replace('#include <color_fragment>', /* glsl */`
+    vec2 p = vec2(vGP.x, -vGP.z);
+    float px = max(length(fwidth(p)), 1e-4);
+    float fine = 1.0 - smoothstep(0.01, 0.05, px);          // fade sub-pixel detail instead of aliasing
+    float mid = 1.0 - smoothstep(0.08, 0.4, px);
+    int k = int(vPat + 0.5);
+    vec3 c = toLin(vColor);
+    gR = 0.92;
+    if (k == 0) {                                           // asphalt: tone drift, repair patches, cracks, grain
+      c *= 0.86 + 0.24 * fbm(p * 0.21);
+      float rp = smoothstep(0.66, 0.67, fbm(p * 0.045 + 3.7));
+      c = mix(c, c * 0.72, rp * 0.8);
+      float cr = 1.0 - smoothstep(0.0, 0.006 + px * 0.5, abs(vnoise(p * 0.9 + 9.0) - 0.5));
+      c *= 1.0 - 0.22 * cr * mid * smoothstep(0.62, 0.7, vnoise(p * 0.06 + 1.3));
+      c *= 1.0 + 0.16 * fine * (hash12(floor(p * 40.0)) - 0.5);
+      c = mix(c, c * 0.55, smoothstep(0.78, 0.86, vnoise(p * 0.5 + 21.0)) * 0.35);   // oil / damp stains
+    } else if (k == 1) {                                    // paving stones: 0.3 x 0.2 m pavers with joints
+      vec2 t = p / vec2(0.30, 0.20); t.x += 0.5 * step(1.0, mod(floor(t.y), 2.0));
+      vec2 f = fract(t), id = floor(t);
+      float j = 1.0 - cov2(f * vec2(0.30, 0.20), vec2(0.008), vec2(0.292, 0.192), max(px, 0.002));
+      c *= (0.88 + 0.22 * hash12(id) * fine) * (1.0 - 0.45 * j * mid);
+      c *= 0.9 + 0.2 * fbm(p * 0.3);
+      gR = 0.85;
+    } else if (k == 2) {                                    // artificial turf: mowing stripes + fibre noise
+      c *= 0.90 + 0.13 * step(0.5, fract(p.x / 10.0)) + 0.06 * (vnoise(p * 9.0) - 0.5) * mid;
+      c *= 0.94 + 0.12 * fbm(p * 0.15);
+      gR = 0.85;
+    } else if (k == 3) {                                    // rubber crumb
+      c *= 0.88 + 0.24 * fbm(p * 0.6) + 0.12 * fine * (hash12(floor(p * 60.0)) - 0.5);
+      gR = 0.95;
+    } else if (k == 4) {                                    // dirt / sand: trampled, darker where damp, grass at the edges
+      float n = fbm(p * 0.35);
+      c *= 0.80 + 0.40 * n;
+      c = mix(c, toLin(vec3(0.33, 0.38, 0.22)), smoothstep(0.62, 0.75, fbm(p * 0.12 + 5.0)) * 0.6);
+      c *= 1.0 + 0.10 * fine * (hash12(floor(p * 30.0)) - 0.5);
+      gR = 0.98;
+    } else if (k == 5) {                                    // paint: worn by tyres
+      float wear = smoothstep(0.55, 0.85, vnoise(p * 1.6) * 0.7 + 0.3 * vnoise(p * 7.0));
+      c = mix(c, toLin(vec3(0.32)), wear * 0.55);
+      gR = 0.7;
+    } else if (k == 6) {                                    // acrylic court
+      c *= 0.94 + 0.08 * fbm(p * 0.4);
+      gR = 0.6;
+    } else if (k == 7) {                                    // ballast
+      c *= 0.75 + 0.5 * vnoise(p * 6.0) * mid + 0.25 * (1.0 - mid);
+      gR = 1.0;
+    } else {
+      c *= 0.85 + 0.3 * fbm(p * 0.5);
+    }
+    diffuseColor.rgb = c;`)
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = gR;');
+};
+const gnd = new THREE.Mesh(gndGeo, gndMat); gnd.receiveShadow = true; gnd.renderOrder = -1; scene.add(gnd);
+
+function patchCommon(shader, extraVert = '', extraFrag = '') {
+  shader.uniforms.uSel = selU; shader.uniforms.uSun = sunU;
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', `#include <common>\nattribute float bidx; varying float vBid; varying vec3 vWPos; varying vec3 vWN; ${extraVert}`)
+    .replace('#include <begin_vertex>', `#include <begin_vertex>\nvBid = bidx; vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz; vWN = normalize(mat3(modelMatrix) * objectNormal);`);
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', `#include <common>\nuniform float uSel; uniform vec3 uSun; varying float vBid; varying vec3 vWPos; varying vec3 vWN; ${SRGB} ${extraFrag}`);
+}
+const SEL_FRAG = `if (abs(vBid - uSel) < 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.18, 0.43, 0.84), 0.28);`;
+
+// facade walls: Soviet panel facade with recessed windows (parallax), reveal shadows, sills, AC units, joints, tiles, streaks
+const wallGeo = new THREE.BufferGeometry();
+wallGeo.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr('wall_pos')), 3));
+wallGeo.setAttribute('wuv', new THREE.BufferAttribute(arr('wall_uv'), 2));
+const wallCol = new Uint8Array(arr('wall_col'));
+wallGeo.setAttribute('color', new THREE.BufferAttribute(wallCol, 3, true));
+wallGeo.setAttribute('p1', new THREE.BufferAttribute(arr('wall_p1'), 4));
+wallGeo.setAttribute('p2', new THREE.BufferAttribute(arr('wall_p2'), 4));
+wallGeo.setAttribute('bidx', new THREE.BufferAttribute(new Float32Array(arr('wall_bid')), 1));
+wallGeo.setIndex(new THREE.BufferAttribute(arr('wall_idx'), 1));
+wallGeo.computeVertexNormals();
+const wallMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 });
+wallMat.onBeforeCompile = (sh) => {
+  patchCommon(sh, 'attribute vec2 wuv; attribute vec4 p1; attribute vec4 p2; varying vec2 vW; varying vec4 vP1; varying vec4 vP2;',
+    'varying vec2 vW; varying vec4 vP1; varying vec4 vP2; float gWin; vec3 gNoff; float gRough;');
+  sh.vertexShader = sh.vertexShader.replace('vBid = bidx;', 'vBid = bidx; vW = wuv; vP1 = p1; vP2 = p2;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', /* glsl */`
+    vec3 base = toLin(vColor);
+    float U = vW.x, Z = vW.y;
+    float fh = vP1.x, span = vP1.y, wtop = vP1.z, pitch = vP1.w;
+    float cps = floor(vP2.x + 0.5), stair = vP2.y, bseed = floor(vP2.z * 100.0 + 0.5) * 0.01, wtype = floor(vP2.w + 0.5);
+    float fw = max(max(abs(dFdx(U)), abs(dFdy(U))), max(abs(dFdx(Z)), abs(dFdy(Z))));   // metres per pixel
+    float lodD = smoothstep(0.025, 0.08, fw);   // fine detail (frames, tiles, joints) fades first
+    float lodW = smoothstep(0.16, 0.45, fw);    // whole window pattern fades to its average
+    float ux = U / pitch, coli = floor(ux), fx = fract(ux);
+    float fz = (Z - 1.0) / fh;
+    float isSt = stair * step(0.5, cps) * (1.0 - step(0.5, abs(mod(coli, max(cps, 1.0)) - floor(cps / 2.0))));
+    float flo = floor(fz + isSt * 0.5);
+    float isPub = step(1.5, wtype);
+    float xl = 0.2 - 0.1 * isPub + 0.12 * isSt, zt = 0.80 + 0.08 * isPub;
+    vec2 w0 = vec2((coli + xl) * pitch, 1.0 + (flo - 0.5 * isSt + 0.30) * fh);
+    vec2 w1 = vec2((coli + 1.0 - xl) * pitch, 1.0 + (flo - 0.5 * isSt + zt) * fh);
+    float cellOK = step(0.0, U) * step(U, span) * step(0.5, wtype) * step(w1.y, wtop + 0.001) * step(0.4, w0.y) * (1.0 - isSt * step(flo, 0.5));
+    float r = hash13(vec3(coli, flo, bseed * 7.0));
+    vec2 P = vec2(U, Z);
+    float inWin = cellOK * cov2(P, w0, w1, fw);
+
+    // --- wall: panels, tiles, joints, weathering
+    float sat = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
+    float panel = hash13(vec3(floor(ux * 0.5), floor(fz), bseed)) * 0.09 - 0.045;
+    vec3 wallC = base * (1.0 + panel) * (0.94 + 0.12 * fbm(P * 1.3 + bseed));
+    float tiled = step(0.035, sat);
+    vec2 tp = vec2(U / 0.245 + 0.5 * mod(floor(Z / 0.075), 2.0), Z / 0.075);
+    float grout = 1.0 - box2(fract(tp), vec2(0.05, 0.1), vec2(0.95, 0.9));
+    float tileTone = hash12(floor(tp) + bseed) * 0.10 - 0.05;
+    wallC *= 1.0 + tiled * (1.0 - lodD) * (tileTone + grout * 0.10);
+    float joint = step(0.5, wtype) * max(1.0 - step(0.018, abs(fract(fz) - 0.0) * fh), 1.0 - step(0.012, abs(fract(ux * 0.5)) * pitch * 2.0));
+    wallC = mix(wallC, wallC * 0.62, joint * (1.0 - smoothstep(0.03, 0.12, fw)) * (1.0 - tiled * 0.5));
+    // rain streaks below window corners and sills, dirt near the ground and under the roof edge
+    float edge = min(abs(U - w0.x), abs(U - w1.x));
+    float below = step(U, span) * step(0.0, U) * step(0.5, wtype);
+    float streak = vnoise(vec2(U * 4.0, Z * 0.18 + bseed * 3.0)) * vnoise(vec2(U * 1.1 + 9.0, Z * 0.05));
+    float st = below * (0.35 * streak + 0.9 * (1.0 - smoothstep(0.04, 0.35, edge)) * streak * (1.0 - step(xl, fx) * step(fx, 1.0 - xl) * 0.6));
+    wallC *= 1.0 - 0.32 * st;
+    wallC *= 1.0 - 0.22 * (1.0 - smoothstep(0.0, 3.5, Z)) - 0.12 * smoothstep(wtop + 0.1, wtop + 0.9, Z) * step(0.5, wtype);
+    wallC = mix(wallC, toLin(vec3(0.36, 0.34, 0.31)) * (0.85 + 0.3 * fbm(P * 2.0)), step(Z, 1.0));          // plinth
+    float vent = step(Z, 0.75) * step(0.35, Z) * box2(vec2(fx, 0.5), vec2(0.42, 0.0), vec2(0.58, 1.0)) * step(0.0, U) * step(U, span);
+    wallC = mix(wallC, vec3(0.02), vent * 0.9);
+    vec3 c = wallC;
+
+    // outside metal sill + its shadow, air conditioners under some windows
+    float sill = cellOK * box2(P, vec2(w0.x - 0.03, w0.y - 0.06), vec2(w1.x + 0.03, w0.y));
+    float sillSh = cellOK * box2(P, vec2(w0.x - 0.03, w0.y - 0.16), vec2(w1.x + 0.03, w0.y - 0.06)) * smoothstep(0.0, 0.6, uSun.y);
+    c = mix(c, c * 0.55, sillSh * 0.8);
+    c = mix(c, toLin(vec3(0.70, 0.70, 0.68)), sill);
+    float hasAC = cellOK * step(r, 0.11) * (1.0 - isSt);
+    float acx = mix(w0.x + 0.15, w1.x - 0.95, step(0.05, r));
+    float ac = hasAC * box2(P, vec2(acx, w0.y - 0.85), vec2(acx + 0.8, w0.y - 0.30));
+    float acSh = hasAC * box2(P, vec2(acx + 0.05, w0.y - 1.0), vec2(acx + 0.85, w0.y - 0.85));
+    c = mix(c, c * 0.5, acSh);
+    c = mix(c, toLin(vec3(0.84, 0.84, 0.82)) * (0.95 + 0.05 * (1.0 - smoothstep(0.003, 0.01, fw)) * step(0.5, fract((Z - w0.y) * 22.0))), ac);
+
+    // recessed opening seen in parallax
+    vec3 N = normalize(vWN);
+    vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N));
+    float tsgn = dFdx(U) * dot(dFdx(vWPos), T) + dFdy(U) * dot(dFdy(vWPos), T);
+    T *= tsgn < 0.0 ? -1.0 : 1.0;
+    vec3 V = normalize(cameraPosition - vWPos);
+    float vn = max(dot(V, N), 0.06);
+    const float DEP = 0.21;
+    vec2 hit = P - vec2(dot(V, T), V.y) / vn * DEP;
+    float onPane = cov2(hit, w0, w1, fw);
+    // reveal faces: which side the ray hits, shaded by the sun
+    vec3 revN = hit.x < w0.x ? T : hit.x > w1.x ? -T : hit.y > w1.y ? vec3(0, -1, 0) : vec3(0, 1, 0);
+    float revL = 0.45 + 0.75 * max(dot(revN, uSun), 0.0) - 0.35 * max(dot(N, uSun), 0.0);
+    vec3 revC = base * 0.88 * clamp(revL, 0.25, 1.3);
+    // sun shadow cast into the opening on the pane
+    float sn = dot(uSun, N);
+    vec2 toSun = hit + vec2(dot(uSun, T), uSun.y) / max(sn, 0.02) * DEP;
+    float lit = sn > 0.02 ? box2(toSun, w0, w1) : 1.0;
+    float rf = hash13(vec3(coli, flo, bseed * 3.1 + 5.0));
+    vec3 frameC = toLin(rf < 0.68 ? vec3(0.88, 0.88, 0.86) : rf < 0.84 ? vec3(0.72, 0.70, 0.64) : rf < 0.95 ? vec3(0.33, 0.23, 0.16) : vec3(0.55, 0.38, 0.24));
+    float gm;
+    vec3 pane = paneColor(hit - w0, w1.x - w0.x, w1.y - w0.y, r, isSt, frameC, fw / vn, gm);
+    pane *= mix(0.42, 1.0, lit);
+    vec3 opening = mix(revC, pane, onPane);
+    c = mix(c, opening, inWin);
+    gWin = inWin * onPane * gm;
+    gNoff = (vec3(hash13(vec3(coli, flo, 1.7)), hash13(vec3(flo, coli, 2.9)), 0.0) - 0.5) * 0.14;
+    gRough = 0.02 + 0.16 * hash13(vec3(coli, flo, 4.3));
+
+    // far away: blend to the facade's average colour to avoid shimmering
+    float area = step(0.0, U) * step(U, span) * step(0.5, wtype) * step(1.3, Z) * step(Z, wtop);
+    vec3 avgC = mix(wallC, vec3(0.045, 0.048, 0.052), area * 0.30);
+    c = mix(c, avgC, lodW);
+    gWin *= 1.0 - lodW;
+    diffuseColor.rgb = c;
+    ${SEL_FRAG}`)
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, gRough, gWin);')
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+normal = normalize(normal + gNoff * gWin);`);
+};
+const walls = new THREE.Mesh(wallGeo, wallMat); walls.castShadow = walls.receiveShadow = true; scene.add(walls);
+
+// balcony glazing (uv in metres, wp = width, height, random, kind)
+const winGeo = new THREE.BufferGeometry();
+winGeo.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr('win_pos')), 3));
+winGeo.setAttribute('wuv', new THREE.BufferAttribute(arr('win_uv'), 2));
+winGeo.setAttribute('wp', new THREE.BufferAttribute(arr('win_wp'), 4));
+winGeo.setAttribute('color', new THREE.BufferAttribute(arr('win_col'), 3, true));
+winGeo.setAttribute('bidx', new THREE.BufferAttribute(new Float32Array(arr('win_bid')), 1));
+winGeo.setIndex(new THREE.BufferAttribute(arr('win_idx'), 1));
+winGeo.computeVertexNormals();
+const winMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, side: THREE.DoubleSide });
+winMat.onBeforeCompile = (sh) => {
+  patchCommon(sh, 'attribute vec2 wuv; attribute vec4 wp; varying vec2 vW; varying vec4 vWp;', 'varying vec2 vW; varying vec4 vWp; float gWin; vec3 gNoff; float gRough;');
+  sh.vertexShader = sh.vertexShader.replace('vBid = bidx;', 'vBid = bidx; vW = wuv; vWp = wp;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', /* glsl */`
+    float fw = max(length(fwidth(vW)), 1e-4);
+    float gm;
+    vec3 pc = paneColor(vW, vWp.x, vWp.y, floor(vWp.z * 1000.0 + 0.5) * 0.001, vWp.w, toLin(vColor), fw, gm);
+    float lod = smoothstep(0.12, 0.4, fw);
+    diffuseColor.rgb = mix(pc, mix(vec3(0.05), toLin(vColor), 0.3), lod);
+    gWin = gm * (1.0 - lod);
+    float rr_ = floor(vWp.z * 1000.0 + 0.5);
+    gNoff = (vec3(fract(rr_ * 0.6180339), fract(rr_ * 0.4142135), 0.0) - 0.5) * 0.12;
+    gRough = 0.02 + 0.14 * fract(rr_ * 0.7320508);
+    ${SEL_FRAG}`)
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, gRough, gWin);')
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+normal = normalize(normal + gNoff * gWin);`);
+};
+const glazing = new THREE.Mesh(winGeo, winMat); glazing.castShadow = glazing.receiveShadow = true; scene.add(glazing);
+
+// roofs, parapets, balconies, machine rooms, canopies, glass, masts
+const restGeo = new THREE.BufferGeometry();
+restGeo.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr('rest_pos'), H.rest_q), 3));
+const restCol = new Uint8Array(arr('rest_col'));
+restGeo.setAttribute('color', new THREE.BufferAttribute(restCol, 3, true));
+restGeo.setAttribute('bidx', new THREE.BufferAttribute(new Float32Array(arr('rest_bid')), 1));
+restGeo.setIndex(new THREE.BufferAttribute(arr('rest_idx'), 1));
+restGeo.computeVertexNormals();
+const restMats = [];
+const REST_FRAG = {
+  1: /* glsl */`vec2 rp = vWPos.xz;
+      float patchN = fbm(rp * 0.09), fine = vnoise(rp * 3.0);
+      vec3 rc = toLin(vColor) * (0.78 + 0.45 * patchN) * (0.93 + 0.14 * fine);
+      rc = mix(rc, rc * 1.45, smoothstep(0.62, 0.70, fbm(rp * 0.05 + 4.0)) * 0.6);     // newer membrane patches
+      rc = mix(rc, vec3(0.03), smoothstep(0.70, 0.78, vnoise(rp * 0.35 + 2.0)) * 0.5);   // puddle stains
+      diffuseColor.rgb = rc;`,
+  2: `diffuseColor.rgb = toLin(vColor) * (0.92 + 0.16 * fbm(vWPos.xz * 1.7 + vWPos.y * 1.3));`,
+  3: `diffuseColor.rgb = mix(toLin(vColor), vec3(0.04, 0.05, 0.06), 0.85);`,
+  4: `diffuseColor.rgb = toLin(vColor);`,
+};
+for (const g of H.rest_groups) {
+  restGeo.addGroup(g.start, g.count, restMats.length);
+  const props = { 1: { roughness: 0.82 }, 2: { roughness: 0.9 }, 3: { roughness: 0.06, metalness: 0.3 }, 4: { roughness: 0.45, metalness: 0.5 } }[g.mat];
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, ...props });
+  m.onBeforeCompile = (sh) => {
+    patchCommon(sh);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `${REST_FRAG[g.mat]} ${SEL_FRAG}`);
+    if (g.mat === 4) sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>',   // illuminated shop signs
+      `#include <emissivemap_fragment>
+if (vColor.r > 0.8 && vColor.g < 0.12 && vColor.b < 0.12) totalEmissiveRadiance += toLin(vColor) * 0.9;`);
+  };
+  restMats.push(m);
+}
+const rest = new THREE.Mesh(restGeo, restMats); rest.castShadow = rest.receiveShadow = true; scene.add(rest);
+
+// street furniture: curbs, tram rails, goals, hoops, fences, playground equipment, benches
+const propGeo = new THREE.BufferGeometry();
+propGeo.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr('prop_pos')), 3));
+propGeo.setAttribute('color', new THREE.BufferAttribute(arr('prop_col'), 3, true));
+propGeo.setAttribute('bidx', new THREE.BufferAttribute(new Float32Array(arr('prop_pos').length / 3).fill(-1), 1));
+propGeo.setIndex(new THREE.BufferAttribute(arr('prop_idx'), 1));
+propGeo.computeVertexNormals();
+H.prop_groups.forEach((g) => { if (g.count) propGeo.addGroup(g.start, g.count, H.rest_groups.findIndex((r) => r.mat === g.mat)); });
+const props = new THREE.Mesh(propGeo, restMats); props.castShadow = props.receiveShadow = true; scene.add(props);
+
+// per-building vertex lists for recolouring (ck: 1 facade, 2 end walls, 3 parapet = facade*0.85, 4 plain balcony = facade*0.97)
+const wallBid = arr('wall_bid'), wallCk = arr('wall_ck'), restBid = arr('rest_bid'), restCk = arr('rest_ck');
+function indexBy(bidArr, ckArr) {
+  const map = new Map();
+  for (let i = 0; i < bidArr.length; i++) {
+    if (!ckArr[i] || bidArr[i] < 0) continue;
+    let l = map.get(bidArr[i]); if (!l) map.set(bidArr[i], l = []); l.push(i);
+  }
+  return map;
+}
+const wallIdx = indexBy(wallBid, wallCk), restIdx = indexBy(restBid, restCk);
+function applyColour(bi, fac, end) {
+  const k = { 1: 1, 2: 1, 3: 0.85, 4: 0.97 };
+  const put = (colArr, ckArr, list) => {
+    for (const i of list || []) {
+      const ck = ckArr[i]; const c = ck === 2 ? end : fac; const f = k[ck];
+      colArr[i * 3] = Math.round(Math.min(1, c[0] * f) * 255); colArr[i * 3 + 1] = Math.round(Math.min(1, c[1] * f) * 255); colArr[i * 3 + 2] = Math.round(Math.min(1, c[2] * f) * 255);
+    }
+  };
+  put(wallCol, wallCk, wallIdx.get(bi)); put(restCol, restCk, restIdx.get(bi));
+  wallGeo.attributes.color.needsUpdate = true; restGeo.attributes.color.needsUpdate = true;
+  if (window.__v && window.__v.invalidate) window.__v.invalidate();
+}
+
+// ---------------------------------------------------------------- trees (instanced, one light model per species)
+const leafTex = await new Promise((res, rej) => loader.load('leaves.png', res, undefined, rej));
+leafTex.colorSpace = THREE.SRGBColorSpace;
+const treeGroup = new THREE.Group(); scene.add(treeGroup);
+const treesArr = arr('trees'); const nTrees = treesArr.length / 6;
+const barkMat = new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.95 });
+const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 });
+const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafTex, alphaTest: 0.45 });
+const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+const TREE_LOD = MOBILE ? 110 : 240;   // metres: full model inside, light model (fewer cards, no twigs) outside
+function treeParts(si, lod) {
+  const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr(`tree${si}_${lod}bark_pos`)), 3));
+  bg.setIndex(new THREE.BufferAttribute(arr(`tree${si}_${lod}bark_idx`), 1)); bg.computeVertexNormals();
+  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr(`tree${si}_${lod}leaf_pos`)), 3));
+  lg.setAttribute('uv', new THREE.BufferAttribute(arr(`tree${si}_${lod}leaf_uv`), 2));
+  lg.setIndex(new THREE.BufferAttribute(arr(`tree${si}_${lod}leaf_idx`), 1)); lg.computeVertexNormals();
+  // leaf normals point up/outwards so crowns are lit like a volume
+  const p = lg.attributes.position, n = lg.attributes.normal;
+  for (let i = 0; i < p.count; i++) { v.set(p.getX(i), p.getY(i) - 9, p.getZ(i)).normalize(); v.y = v.y * 0.6 + 0.4; v.normalize(); n.setXYZ(i, v.x, v.y, v.z); }
+  return [bg, lg];
+}
+const treeSets = [];
+H.species.forEach((sp, si) => {
+  const ids = []; for (let i = 0; i < nTrees; i++) if (treesArr[i * 6 + 4] === si && (!MOBILE || treesArr[i * 6 + 5] < 0.72 || treesArr[i * 6 + 2] > 0.95)) ids.push(i);
+  const mats = new Float32Array(ids.length * 16), cols = new Float32Array(ids.length * 3), pos = new Float32Array(ids.length * 2);
+  ids.forEach((i, k) => {
+    const o = i * 6, s = treesArr[o + 2];
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), treesArr[o + 3]);
+    m4.compose(v.set(treesArr[o], 0, -treesArr[o + 1]), q, sc.set(s, s, s)); m4.toArray(mats, k * 16);
+    const r = treesArr[o + 5]; col.setRGB(0.78 + r * 0.42, 0.85 + r * 0.25, 0.62 + r * 0.25); col.toArray(cols, k * 3);
+    pos[k * 2] = treesArr[o]; pos[k * 2 + 1] = -treesArr[o + 1];
+  });
+  const set = { n: ids.length, mats, cols, pos };
+  for (const lod of ['', 'lo_']) {
+    const [bg, lg] = treeParts(si, lod);
+    const bark = new THREE.InstancedMesh(bg, barkMat, ids.length);
+    const leaves = new THREE.InstancedMesh(lg, leafMat, ids.length);
+    leaves.customDepthMaterial = leafDepth; leaves.setColorAt(0, col);
+    for (const m of [bark, leaves]) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; treeGroup.add(m); }
+    set[lod ? 'lo' : 'hi'] = [bark, leaves];
+  }
+  treeSets.push(set);
+});
+function updateTreeLod() {
+  const cp = camera.position, h2 = TREE_LOD * TREE_LOD, y2 = cp.y * cp.y;
+  for (const S of treeSets) {
+    let nh = 0, nl = 0;
+    const [hb, hl] = S.hi, [lb, ll] = S.lo;
+    for (let j = 0; j < S.n; j++) {
+      const dx = S.pos[j * 2] - cp.x, dz = S.pos[j * 2 + 1] - cp.z, near = dx * dx + dz * dz + y2 < h2;
+      const mm = S.mats.subarray(j * 16, j * 16 + 16), cc = S.cols.subarray(j * 3, j * 3 + 3);
+      if (near) { hb.instanceMatrix.array.set(mm, nh * 16); hl.instanceMatrix.array.set(mm, nh * 16); hl.instanceColor.array.set(cc, nh * 3); nh++; }
+      else { lb.instanceMatrix.array.set(mm, nl * 16); ll.instanceMatrix.array.set(mm, nl * 16); ll.instanceColor.array.set(cc, nl * 3); nl++; }
+    }
+    hb.count = hl.count = nh; lb.count = ll.count = nl;
+    for (const m of [hb, hl, lb, ll]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
+}
+
+// ---------------------------------------------------------------- cars
+const carGroup = new THREE.Group(); scene.add(carGroup);
+const carsArr = arr('cars'); const nCars = carsArr.length / 7;
+// kind: 0 body paint (tinted per instance), 1 glass, 2 trim / lights / tyres with their own colour
+const carMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.1, side: THREE.DoubleSide });
+carMat.onBeforeCompile = (sh) => {
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute float ckind; varying float vK;')
+    .replace('#include <color_vertex>', 'vColor = color; vK = ckind;\n#ifdef USE_INSTANCING_COLOR\nif (ckind < 0.5) vColor *= instanceColor.xyz;\n#endif');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying float vK;')
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = vK < 0.5 ? 0.22 : (vK < 1.5 ? 0.04 : 0.55);')
+    .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = vK < 0.5 ? 0.25 : (vK < 1.5 ? 0.0 : 0.15);');
+};
+const CAR_LOD = MOBILE ? { hi: 60, lo: 420 } : { hi: 140, lo: 1400 };
+function carGeo(pre) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(xyzToThree(arr(`${pre}_pos`)), 3));
+  const cc = arr(`${pre}_col`), vc = new Float32Array(cc.length);
+  for (let i = 0; i < cc.length; i++) vc[i] = Math.pow(cc[i] / 255, 2.2);
+  g.setAttribute('color', new THREE.BufferAttribute(vc, 3));
+  g.setAttribute('ckind', new THREE.BufferAttribute(new Float32Array(arr(`${pre}_kind`)), 1));
+  g.setIndex(new THREE.BufferAttribute(arr(`${pre}_idx`), 1));
+  return toCreasedNormals(g.toNonIndexed(), THREE.MathUtils.degToRad(32));   // smooth panels, crisp edges
+}
+const carSets = [];
+for (let k = 0; k < H.ncar; k++) {
+  const ids = []; for (let i = 0; i < nCars; i++) if (carsArr[i * 7 + 3] === k) ids.push(i);
+  if (!ids.length) continue;
+  const mats = new Float32Array(ids.length * 16), cols = new Float32Array(ids.length * 3), pos = new Float32Array(ids.length * 2);
+  ids.forEach((i, j) => {
+    const o = i * 7;
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), carsArr[o + 2]);
+    m4.compose(v.set(carsArr[o], 0.045, -carsArr[o + 1]), q, sc.set(1, 1, 1)); m4.toArray(mats, j * 16);
+    col.setRGB(carsArr[o + 4], carsArr[o + 5], carsArr[o + 6], THREE.SRGBColorSpace); col.toArray(cols, j * 3);
+    pos[j * 2] = carsArr[o]; pos[j * 2 + 1] = -carsArr[o + 1];
+  });
+  const mk = (lod) => {
+    const im = new THREE.InstancedMesh(carGeo(`car${k}_${lod}`), carMat, ids.length);
+    im.setColorAt(0, col); im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; im.count = 0;
+    carGroup.add(im); return im;
+  };
+  carSets.push({ n: ids.length, mats, cols, pos, hi: mk('hi'), lo: mk('lo') });
+}
+const lastLod = new THREE.Vector3(1e9, 0, 0);
+function updateCarLod(force) {
+  const cp = camera.position;
+  if (!force && cp.distanceToSquared(lastLod) < 64) return false;
+  lastLod.copy(cp);
+  updateTreeLod();
+  const h2 = CAR_LOD.hi * CAR_LOD.hi, l2 = CAR_LOD.lo * CAR_LOD.lo, y2 = cp.y * cp.y;
+  for (const S of carSets) {
+    let nh = 0, nl = 0;
+    const hm = S.hi.instanceMatrix.array, lm = S.lo.instanceMatrix.array, hc = S.hi.instanceColor.array, lc = S.lo.instanceColor.array;
+    for (let j = 0; j < S.n; j++) {
+      const dx = S.pos[j * 2] - cp.x, dz = S.pos[j * 2 + 1] - cp.z, d2 = dx * dx + dz * dz + y2;
+      if (d2 < h2) { hm.set(S.mats.subarray(j * 16, j * 16 + 16), nh * 16); hc.set(S.cols.subarray(j * 3, j * 3 + 3), nh * 3); nh++; }
+      else if (d2 < l2) { lm.set(S.mats.subarray(j * 16, j * 16 + 16), nl * 16); lc.set(S.cols.subarray(j * 3, j * 3 + 3), nl * 3); nl++; }
+    }
+    S.hi.count = nh; S.lo.count = nl;
+    for (const im of [S.hi, S.lo]) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; }
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------- 603 boundary
+const bpts = meta.boundary.map(([x, y]) => new THREE.Vector3(x, 1.5, -y)); bpts.push(bpts[0].clone());
+const boundary = new THREE.Line(new THREE.BufferGeometry().setFromPoints(bpts),
+  new THREE.LineDashedMaterial({ color: 0x2f6fd6, dashSize: 8, gapSize: 5, depthTest: false, transparent: true }));
+boundary.computeLineDistances(); boundary.renderOrder = 10; boundary.visible = false; scene.add(boundary);
+
+// ---------------------------------------------------------------- sun / time of day (Kharkiv, early summer)
+function setHour(h) {
+  const t = (h - 4.6) / (20.6 - 4.6);                         // sunrise ~4:36, sunset ~20:36 local summer time
+  const elev = Math.max(2, 63 * Math.sin(Math.PI * t));
+  const az = 55 + 250 * t;                                    // degrees from north, clockwise
+  const e = THREE.MathUtils.degToRad(elev), a = THREE.MathUtils.degToRad(az);
+  const dir = new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e));
+  su.sunPosition.value.copy(dir); sunU.value.copy(dir); envSky.material.uniforms.sunPosition.value.copy(dir);
+  for (const k of ['turbidity', 'rayleigh', 'mieCoefficient', 'mieDirectionalG']) envSky.material.uniforms[k].value = su[k].value;
+  sunDir.copy(dir); fitShadow();
+  const warm = 1 - Math.min(1, elev / 30);
+  sun.color.setRGB(1, 0.93 - warm * 0.25, 0.85 - warm * 0.4);
+  sun.intensity = 0.8 + 2.6 * Math.min(1, elev / 25);
+  hemi.intensity = 0.12 + 0.16 * Math.min(1, elev / 30);
+  scene.fog.color.setRGB(0.78 - warm * 0.05, 0.82 - warm * 0.12, 0.86 - warm * 0.22);
+  renderer.shadowMap.needsUpdate = true;
+  clearTimeout(setHour.t);
+  setHour.t = setTimeout(() => { if (envRT) envRT.dispose(); envRT = pmrem.fromScene(envScene); scene.environment = envRT.texture; scene.environmentIntensity = 0.28; }, 120);
+  const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+  $('hourOut').textContent = `${hh}:${String(mm).padStart(2, '0')}`;
+}
+$('hour').addEventListener('input', (e) => setHour(+e.target.value));
+setHour(15);
+
+// ---------------------------------------------------------------- views
+const VIEWS = {
+  overview: { pos: [-80, 420, 780], tgt: [-20, 0, -60] },
+  towers: { pos: [-170, 95, 430], tgt: [-40, 25, 70] },
+  avenue: { pos: [260, 60, 560], tgt: [20, 15, 330] },
+  top: { pos: [0, 1500, 120], tgt: [0, 0, -10] },
+};
+let anim = null;
+function flyTo(pos, tgt, ms = 1300) {
+  anim = { t0: performance.now(), ms, p0: camera.position.clone(), t0v: controls.target.clone(), p1: new THREE.Vector3(...pos), t1: new THREE.Vector3(...tgt) };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) anim.ms = 1;
+}
+document.querySelectorAll('#views button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('#views button').forEach((x) => x.classList.toggle('on', x === b));
+  const vw = VIEWS[b.dataset.view]; flyTo(vw.pos, vw.tgt);
+}));
+camera.position.set(...VIEWS.overview.pos); controls.target.set(...VIEWS.overview.tgt);
+
+// ---------------------------------------------------------------- toggles
+function bindToggle(id, fn) {
+  const el = $(id); const lab = el.closest('.tog');
+  el.addEventListener('change', () => { lab.classList.toggle('on', el.checked); fn(el.checked); renderer.shadowMap.needsUpdate = true; });
+}
+bindToggle('tTrees', (on) => { treeGroup.visible = on; });
+bindToggle('tCars', (on) => { carGroup.visible = on; });
+bindToggle('tShadow', (on) => { sun.castShadow = on; });
+bindToggle('tBound', (on) => { boundary.visible = on; });
+
+// ---------------------------------------------------------------- building card + colours
+const KIND = { apartments: 'Житловий будинок', yes: 'Будівля', retail: 'Магазин', school: 'Школа', kindergarten: 'Дитячий садок',
+  garage: 'Гараж', garages: 'Гаражі', dormitory: 'Гуртожиток', service: 'Службова будівля', commercial: 'Комерційна' };
+const PRESETS = [[0.67, 0.67, 0.65], [0.73, 0.72, 0.69], [0.74, 0.69, 0.61], [0.80, 0.73, 0.62], [0.78, 0.61, 0.57],
+  [0.55, 0.69, 0.50], [0.70, 0.74, 0.76], [0.82, 0.78, 0.62], [0.62, 0.36, 0.28], [0.86, 0.86, 0.84]];
+const toHex = (c) => '#' + c.map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+const fromHex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+const addr = (b) => [b.street, b.num].filter(Boolean).join(', ') || (b.num ? b.num : 'Адреса не вказана в OSM');
+const userCols = new Map();   // osm id -> {facade, end}
+let current = -1;
+
+PRESETS.forEach((c) => {
+  const bt = document.createElement('button'); bt.style.background = toHex(c); bt.title = toHex(c); bt.setAttribute('aria-label', 'Колір ' + toHex(c));
+  bt.addEventListener('click', () => { $('colF').value = toHex(c); $('colE').value = toHex(c.map((x) => x * 0.93)); preview(); });
+  $('presets').appendChild(bt);
+});
+function cols(b) { const u = userCols.get(String(b.id)); return u ? [u.facade, u.end || u.facade, true] : [b.facade, b.end, false]; }
+function showCard(bi) {
+  current = bi; selU.value = bi; const b = B[bi];
+  $('card').hidden = false; $('search').hidden = innerWidth <= 640;
+  $('cAddr').textContent = addr(b);
+  $('cKind').textContent = KIND[b.kind] || b.kind;
+  $('cLv').textContent = b.lv ? `${b.lv} (OSM)` : `≈${b.lvEst} (оцінка)`;
+  $('cH').textContent = `${b.h.toFixed(1)} м`;
+  $('cOsm').textContent = `way ${b.id}`;
+  const [f, e, user] = cols(b);
+  $('swF').style.background = toHex(f); $('swE').style.background = toHex(e);
+  $('colF').value = toHex(f); $('colE').value = toHex(e);
+  $('cSrc').innerHTML = user ? '<b>Колір виправлено вручну</b> на цій сторінці.' : `Джерело кольору: <b>${srcLabel(b.src)}</b>`;
+  $('saveNote').textContent = dbState.note; $('saveNote').classList.toggle('warn', !dbState.ok);
+}
+function srcLabel(s) {
+  if (s.startsWith('user')) return 'ваше уточнення (зелений)';
+  if (s.startsWith('Street View')) return s.replace('Street View', 'панорами Google').replace(':', ' —');
+  if (s.startsWith('estimated')) return 'оцінка за типовою палітрою Салтівки';
+  return 'типовий колір для такого типу будівлі';
+}
+function preview() { if (current >= 0) applyColour(current, fromHex($('colF').value), fromHex($('colE').value)); }
+$('colF').addEventListener('input', preview); $('colE').addEventListener('input', preview);
+$('closeCard').addEventListener('click', () => {
+  if (current >= 0) { const [f, e] = cols(B[current]); applyColour(current, f, e); }
+  current = -1; selU.value = -1; $('card').hidden = true; $('search').hidden = false;
+});
+
+// pick a building by clicking (ignore drags)
+const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); let down = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+  ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects([walls, rest, glazing], false);
+  const h = hits[0];
+  if (!h) return;
+  const bi = h.object.geometry.attributes.bidx.getX(h.face.a);
+  if (bi >= 0) showCard(bi);
+});
+
+// address search
+const index603 = B.filter((b) => (b.street || b.num) && b.kind !== 'garage').map((b) => ({ b, key: addr(b).toLowerCase() }));
+$('q').addEventListener('input', () => {
+  const s = $('q').value.trim().toLowerCase(); const ul = $('results'); ul.textContent = '';
+  if (!s) return;
+  const words = s.split(/\s+/);
+  index603.filter((x) => words.every((w) => x.key.includes(w))).slice(0, 12).forEach(({ b }) => {
+    const li = document.createElement('li'); const bt = document.createElement('button');
+    const name = document.createElement('span'); name.textContent = addr(b);
+    const sm = document.createElement('small'); sm.textContent = (b.lv || '≈' + b.lvEst) + ' пов.';
+    bt.append(name, sm);
+    bt.addEventListener('click', () => {
+      const [x, y] = b.c; const d = 90 + b.h * 2.2;
+      flyTo([x - d * 0.55, b.h + d * 0.7, -y + d], [x, b.h * 0.5, -y]); showCard(b.i); ul.textContent = ''; $('q').value = '';
+    });
+    li.appendChild(bt); ul.appendChild(li);
+  });
+});
+
+// ---------------------------------------------------------------- shared colour corrections (db)
+const dbState = { ok: false, note: 'Збереження ще під’єднується…', db: null };
+$('save').addEventListener('click', async () => {
+  if (current < 0) return;
+  const b = B[current]; const facade = fromHex($('colF').value), end = fromHex($('colE').value);
+  if (!dbState.db) { $('saveNote').textContent = 'Збереження недоступне в цьому перегляді. Колір показано лише тут.'; $('saveNote').classList.add('warn'); return; }
+  $('save').disabled = true;
+  try {
+    await dbState.db.collection('colors').doc(String(b.id)).set({ facade, end, address: addr(b), updatedAt: new Date().toISOString() });
+    $('saveNote').textContent = 'Збережено. Колір побачать усі, хто відкриє сторінку.'; $('saveNote').classList.remove('warn');
+  } catch (err) {
+    $('saveNote').textContent = err && err.code === 'invalid_argument' ? 'У вас немає прав змінювати кольори на цій сторінці.' : 'Не вдалося зберегти, спробуйте ще раз.';
+    $('saveNote').classList.add('warn');
+  } finally { $('save').disabled = false; }
+});
+$('reset').addEventListener('click', async () => {
+  if (current < 0) return; const b = B[current];
+  if (dbState.db && userCols.has(String(b.id))) { try { await dbState.db.collection('colors').doc(String(b.id)).delete(); } catch (e) { /* keep local */ } }
+  userCols.delete(String(b.id)); applyColour(current, b.facade, b.end); showCard(current);
+});
+(async () => {
+  const db = await window.claude?.use?.('db').catch(() => null);
+  if (!db) { dbState.note = 'Збереження недоступне в цьому перегляді: зміни видно лише вам до перезавантаження.'; return; }
+  dbState.db = db; dbState.ok = true; dbState.note = 'Зміни бачать усі, хто відкриває цю сторінку. Я використаю їх для наступного рендеру.';
+  const byId = new Map(B.map((b) => [String(b.id), b]));
+  db.collection('colors').onSnapshot((snap) => {
+    const seen = new Set();
+    for (const d of snap.docs) {
+      const x = d.data(); if (!x || !Array.isArray(x.facade)) continue;
+      seen.add(d.id); userCols.set(d.id, { facade: x.facade, end: x.end || x.facade });
+      const b = byId.get(d.id); if (b && b.i !== current) applyColour(b.i, x.facade, x.end || x.facade);
+    }
+    for (const id of [...userCols.keys()]) if (!seen.has(id)) { userCols.delete(id); const b = byId.get(id); if (b) applyColour(b.i, b.facade, b.end); }
+    if (current >= 0) showCard(current);
+  }, () => { dbState.ok = false; dbState.note = 'Збереження зараз недоступне.'; });
+})();
+
+// ---------------------------------------------------------------- loop
+const useAO = !matchMedia('(pointer: coarse)').matches;
+let composer = null, gtao = null;
+if (useAO) {
+  const pr = renderer.getPixelRatio();
+  composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 }));
+  composer.addPass(new RenderPass(scene, camera));
+  gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+  gtao.output = GTAOPass.OUTPUT.Default;
+  gtao.blendIntensity = 0.85;
+  gtao.updateGtaoMaterial({ radius: 3.0, distanceExponent: 1.5, thickness: 2.0, scale: 1.0, samples: 12, distanceFallOff: 1.0 });
+  gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+  composer.addPass(gtao);
+  composer.addPass(new OutputPass());
+}
+function draw() { if (composer) composer.render(); else renderer.render(scene, camera); }
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.fov = innerWidth < innerHeight ? 58 : 42; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); dirty = 3;
+  if (composer) composer.setSize(innerWidth, innerHeight);
+});
+window.__v = { camera, controls, flyTo, renderer, scene, draw: () => { updateCarLod(true); draw(); }, get composer() { return composer; }, fitShadow };
+const needle = $('needle');
+let dirty = 3;                                    // frames still to draw; anything that changes the picture bumps it
+const invalidate = () => { dirty = Math.max(dirty, 2); };
+for (const ev of ['pointerdown', 'pointermove', 'wheel', 'input', 'change', 'click', 'keydown', 'touchmove'])
+  addEventListener(ev, invalidate, { passive: true });
+controls.addEventListener('change', invalidate);
+window.__v.invalidate = invalidate;
+function frame(t) {
+  if (anim) {
+    let k = Math.min(1, (t - anim.t0) / anim.ms); k = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    camera.position.lerpVectors(anim.p0, anim.p1, k); controls.target.lerpVectors(anim.t0v, anim.t1, k);
+    if (k >= 1) anim = null;
+  }
+  if (controls.update() || anim) dirty = Math.max(dirty, 2);
+  if (!dirty) { requestAnimationFrame(frame); return; }
+  dirty--;
+  if (updateCarLod(false)) renderer.shadowMap.needsUpdate = true;
+  const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+  needle.setAttribute('transform', `rotate(${THREE.MathUtils.radToDeg(az)} 15 15)`);
+  if (shadowDirty) { shadowDirty = false; fitShadow(); }
+  draw();
+  requestAnimationFrame(frame);
+}
+renderer.shadowMap.needsUpdate = true;
+$('loading').hidden = true;
+requestAnimationFrame(frame);
+</script>

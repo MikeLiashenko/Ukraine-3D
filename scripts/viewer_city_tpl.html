@@ -1,0 +1,1515 @@
+@@HEAD@@
+/* ---- microdistrict picker, map labels, status ---- */
+#brand .stat { font-family: var(--mono); font-size: 11px; color: var(--accent); min-height: 1em; }
+#districts { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(150px + env(safe-area-inset-top, 0px));
+  width: 244px; padding: 10px; display: grid; gap: 8px; max-height: calc(100vh - 250px); overflow: auto; align-content: start; }
+#districts h3 { margin: 0; font: 600 11.5px var(--body); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase;
+  display: flex; justify-content: space-between; align-items: center; }
+#districts h3 small { font: 400 11px var(--mono); letter-spacing: 0; text-transform: none; }
+#rlist { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+#rlist button { padding: 7px 6px; font: 500 12px var(--body); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#rlist button.on, #plist button.on { background: var(--accent); color: var(--accent-ink); }
+#plist { display: flex; flex-wrap: wrap; gap: 4px; max-height: 168px; overflow: auto; }
+#plist button { padding: 5px 7px; font: 400 11.5px var(--body); }
+#dlist { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+#dlist button { padding: 8px 4px; font: 500 12px var(--mono); position: relative; overflow: hidden; text-overflow: ellipsis; }
+#dlist button.loaded::after { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+#dlist button.on::after { background: var(--accent-ink); }
+#dlist button.busy { animation: pulse 0.9s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+#districts .note { line-height: 1.4; }
+#dBtn { display: none; }
+#labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+#labels button { position: absolute; left: 0; top: 0; pointer-events: auto; font: 600 12px var(--mono); padding: 5px 8px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  will-change: transform; }
+#labels button.on { background: var(--accent); color: var(--accent-ink); }
+#labels button.raion { font: 700 13px var(--body); padding: 6px 10px; }
+#labels button.place { font: 500 11.5px var(--body); padding: 4px 7px; opacity: 0.92; }
+#results small { white-space: nowrap; }
+#shot { display: inline-flex; align-items: center; gap: 6px; }
+#shot svg { width: 16px; height: 16px; flex: none; }
+#shot:disabled { opacity: 0.6; cursor: progress; }
+#flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity 0.45s ease-out; z-index: 4; }
+#flash.on { opacity: 0.85; transition: none; }
+#prog { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(110px + env(safe-area-inset-bottom, 0px)); z-index: 4;
+  padding: 12px 14px; display: grid; gap: 8px; width: min(380px, calc(100vw - 32px)); box-sizing: border-box; }
+#prog .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#prog strong { font: 600 13px var(--body); }
+#prog span { font: 400 11.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.4; }
+#prog .bar { height: 4px; border-radius: 2px; background: var(--chip); overflow: hidden; }
+#prog .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.25s; }
+#toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); padding: 9px 14px; font-size: 13px; z-index: 4; }
+@media (max-width: 640px) {
+  #brand .stat { display: block; font-size: 10.5px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #dBtn { display: inline-flex; }
+  #districts { left: 8px; right: 8px; width: auto; top: auto; bottom: calc(112px + env(safe-area-inset-bottom, 0px)); max-height: 52vh; padding: 10px; }
+  #districts:not(.open) { display: none; }
+  #dlist { grid-template-columns: repeat(4, 1fr); }
+  #dlist button { padding: 10px 4px; font-size: 13px; }
+  #labels button { font-size: 11px; padding: 4px 6px; }
+  #prog { bottom: calc(124px + env(safe-area-inset-bottom, 0px)); }
+  #toast { bottom: calc(124px + env(safe-area-inset-bottom, 0px)); max-width: calc(100vw - 32px); }
+  #shot { padding: 7px 10px; }
+}
+</style>
+
+<div id="stage"></div>
+<div id="labels" aria-hidden="false"></div>
+<div id="flash"></div>
+<div id="toast" class="panel" role="status" hidden></div>
+<div id="prog" class="panel" role="status" hidden>
+  <div class="row"><strong id="progT">Підготовка фото…</strong><button id="progX">Скасувати</button></div>
+  <div class="bar"><i id="progB"></i></div>
+  <span id="progS"></span>
+</div>
+
+<div id="loading"><div><strong>Харків</strong><span id="loadmsg">завантаження карти…</span></div></div>
+
+<header id="brand" class="panel">
+  <h1><span id="bTitle">Харків</span> <span id="bKey"></span></h1>
+  <p id="bName">Усе місто з OpenStreetMap: понад 100 тис. будівель, дороги, парки, майданчики. Оберіть район, місцевість або мікрорайон Салтівки.</p>
+  <div class="stat" id="bStat"></div>
+</header>
+
+<section id="districts" class="panel" aria-label="Райони">
+  <h3>Райони <small id="dCount"></small></h3>
+  <div id="rlist"></div>
+  <div id="plWrap" hidden><h3><span id="plTitle">Місцевості</span><small id="plCount"></small></h3><div id="plist"></div></div>
+  <h3>Салтівка · мікрорайони <small id="sCount"></small></h3>
+  <div id="dlist"></div>
+  <p class="note">Довкола центру огляду місто будується в повній деталізації (будинки, дерева, авто), далі видно спрощену забудову всього Харкова.</p>
+</section>
+
+<div id="search" class="panel">
+  <input id="q" type="search" placeholder="Адреса: Сумська 10, Ювілейний 61Д…" autocomplete="off" aria-label="Пошук будинку за адресою">
+  <ul id="results"></ul>
+</div>
+
+<aside id="card" class="panel" hidden aria-live="polite">
+  <button class="close" id="closeCard" aria-label="Закрити">✕</button>
+  <h2 id="cAddr">—</h2>
+  <dl>
+    <dt>Місце</dt><dd id="cDist">—</dd>
+    <dt>Тип</dt><dd id="cKind">—</dd>
+    <dt>Поверхів</dt><dd id="cLv">—</dd>
+    <dt>Висота</dt><dd id="cH">—</dd>
+    <dt>OSM</dt><dd id="cOsm">—</dd>
+  </dl>
+  <div class="swatches"><div class="sw" id="swF" title="Фасад"></div><div class="sw" id="swE" title="Торці"></div>
+    <p class="src" id="cSrc">—</p></div>
+  <div class="edit" id="editBox">
+    <div class="row"><input type="color" id="colF" aria-label="Колір фасаду"><span class="note">Фасад</span>
+      <input type="color" id="colE" aria-label="Колір торців"><span class="note">Торці</span></div>
+    <div class="presets" id="presets"></div>
+    <div class="row"><button class="primary" id="save">Зберегти колір</button><button id="reset">Скинути</button></div>
+    <p class="note" id="saveNote">Зміни бачать усі, хто відкриває цю сторінку.</p>
+  </div>
+</aside>
+
+<div id="compass" class="panel" title="Північ"><svg viewBox="0 0 30 30" aria-hidden="true"><g id="needle"><path d="M15 3 L19 15 L15 13 L11 15 Z" fill="var(--accent)"/><path d="M15 27 L19 15 L15 17 L11 15 Z" fill="var(--muted)"/></g><text x="15" y="2.5" text-anchor="middle" font-size="5" fill="var(--ink)" font-family="var(--mono)">N</text></svg></div>
+
+<nav id="dock" class="panel" aria-label="Керування">
+  <div class="chips">
+  <div class="group" id="views">
+    <button id="dBtn" aria-expanded="false">Райони</button>
+    <button data-view="all">Весь Харків</button>
+    <button data-view="salt">Салтівка</button>
+    <button data-view="district" class="on">Тут</button>
+    <button data-view="top">Згори</button>
+  </div>
+  <div class="sep"></div>
+  <div class="group">
+    <label class="tog on"><input type="checkbox" id="tTrees" checked>Дерева</label>
+    <label class="tog on"><input type="checkbox" id="tCars" checked>Авто</label>
+    <label class="tog on"><input type="checkbox" id="tShadow" checked>Тіні</label>
+    <label class="tog on"><input type="checkbox" id="tBound" checked>Межі</label>
+  </div>
+  </div>
+  <div class="sep"></div>
+  <div class="time"><label for="hour">Час</label><input type="range" id="hour" min="6" max="20.5" step="0.25" value="15"><output id="hourOut">15:00</output>
+    <button id="shot" title="Зберегти поточний вид як фото"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Фото</button></div>
+</nav>
+
+<script>addEventListener('error',e=>{const m=document.getElementById('loadmsg');if(m)m.textContent='Помилка: '+e.message;});addEventListener('unhandledrejection',e=>{const m=document.getElementById('loadmsg');if(m)m.textContent='Помилка: '+(e.reason&&e.reason.message||e.reason);});</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+// phones and tablets: lower resolution, smaller shadow map, no AO, fewer trees, nearer LOD, fewer chunks in memory
+const MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600;
+const MAXC = MOBILE ? 4 : 10;                      // chunks (microdistricts / city tiles) kept in full detail at once
+
+const $ = (id) => document.getElementById(id);
+const msg = (t) => { $('loadmsg').textContent = t; };
+const BA = THREE.BufferAttribute;
+
+// ---------------------------------------------------------------- data
+async function loadBin(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + ' ' + r.status);
+  const buf = new Uint8Array(await r.arrayBuffer());
+  if (buf[0] === 0x1f && buf[1] === 0x8b) {
+    const ds = new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')));
+    return await ds.arrayBuffer();
+  }
+  return buf.buffer;
+}
+const TYPES = { float32: Float32Array, int16: Int16Array, uint8: Uint8Array, uint32: Uint32Array };
+const view = (H, raw) => (name) => { const h = H[name]; if (!h) throw new Error('немає ' + name); return new TYPES[h.dtype](raw, h.offset, h.count); };
+// local metres (x east, y north, z up) -> three.js (x, y up, z south)
+function xyzToThree(src, scale = 1) {
+  const out = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i += 3) { out[i] = src[i] * scale; out[i + 1] = src[i + 2] * scale; out[i + 2] = -src[i + 1] * scale; }
+  return out;
+}
+const upNormals = (n) => { const a = new Float32Array(n * 3); for (let i = 1; i < a.length; i += 3) a[i] = 1; return new BA(a, 3); };
+const loader = new THREE.TextureLoader();
+const loadTex = (url) => new Promise((res, rej) => loader.load(url, res, undefined, rej));
+
+const VER = '@@VER@@';                                  // build stamp: city files are re-fetched after every rebuild
+msg('завантаження карти…');
+const [IDX, CITY, commonRaw, ctxRaw, demRaw] = await Promise.all([fetch('index.json').then((r) => r.json()), fetch(`city.json?v=${VER}`).then((r) => r.json()),
+  loadBin('common.bin.wasm'), loadBin('context.bin.wasm'), loadBin(`city/dem.bin.wasm?v=${VER}`)]);
+
+// ---------------------------------------------------------------- terrain (SRTM via AWS Terrain Tiles, 30 m grid, metres relative to Saltivka)
+const DEM = (() => {
+  const [x0, y0, dx, nx, ny, ref, base] = new Float32Array(demRaw, 0, 8);
+  return { x0, y0, dx, nx: nx | 0, ny: ny | 0, ref, base, h: new Int16Array(demRaw, 32, (nx | 0) * (ny | 0)) };
+})();
+// ground height at local metres (x east, y north), bilinear; the far ground outside the grid sits at the grid's edge height
+function hAt(x, y) {
+  const D = DEM; let fx = (x - D.x0) / D.dx, fy = (y - D.y0) / D.dx;
+  if (!(fx >= 0 && fy >= 0 && fx <= D.nx - 1 && fy <= D.ny - 1)) return D.base;
+  const i = Math.min(D.nx - 2, fx | 0), j = Math.min(D.ny - 2, fy | 0); fx -= i; fy -= j;
+  const k = j * D.nx + i, a = D.h[k], b = D.h[k + 1], c = D.h[k + D.nx], d = D.h[k + D.nx + 1];
+  return ((a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy) * 0.1;
+}
+// three.js positions (x, up, -north) of something whose group sits at local (ox, oy): add the ground height under every vertex
+function dispArr(p, ox = 0, oy = 0) { for (let i = 0; i < p.length; i += 3) p[i + 1] += hAt(p[i] + ox, oy - p[i + 2]); return p; }
+// same, keeping each vertex's ground height (the overview's window grid counts floors from the ground)
+function dispGz(g) { const p = g.attributes.position.array, gz = new Float32Array(p.length / 3); for (let i = 0, k = 0; i < p.length; i += 3, k++) { gz[k] = hAt(p[i], -p[i + 2]); p[i + 1] += gz[k]; } g.setAttribute('gz', new BA(gz, 1)); }
+// split ground triangles until no edge is longer than L (edge-based, so neighbours stay crack-free), all attributes interpolated
+function tessGeo(g, L) {
+  const n0 = g.attributes.position.count, names = Object.keys(g.attributes);
+  const A = names.map((nm) => { const a = g.attributes[nm], it = a.itemSize, v = new Array(n0 * it); for (let i = 0; i < n0; i++) for (let c = 0; c < it; c++) v[i * it + c] = a.getComponent(i, c); return { nm, a, it, v }; });
+  const pv = A[names.indexOf('position')].v;
+  let n = n0; const mids = new Map(), out = [], st = [], L2 = L * L;
+  const len2 = (i, j) => { const dx = pv[i * 3] - pv[j * 3], dz = pv[i * 3 + 2] - pv[j * 3 + 2]; return dx * dx + dz * dz; };
+  const mid = (i, j) => {
+    const key = i < j ? i * 1e7 + j : j * 1e7 + i; let m = mids.get(key);
+    if (m === undefined) { m = n++; for (const o of A) for (let c = 0; c < o.it; c++) o.v.push((o.v[i * o.it + c] + o.v[j * o.it + c]) / 2); mids.set(key, m); }
+    return m;
+  };
+  const src = g.index ? g.index.array : null;
+  for (let t = 0, nt = (src ? src.length : n0); t < nt; t++) st.push(src ? src[t] : t);
+  const T = (a, b, c) => st.push(a, b, c);
+  while (st.length) {
+    const c = st.pop(), b = st.pop(), a = st.pop();
+    const s0 = len2(a, b) > L2, s1 = len2(b, c) > L2, s2 = len2(c, a) > L2;
+    if (!s0 && !s1 && !s2) { out.push(a, b, c); continue; }
+    const m0 = s0 ? mid(a, b) : -1, m1 = s1 ? mid(b, c) : -1, m2 = s2 ? mid(c, a) : -1;
+    if (s0 && s1 && s2) { T(a, m0, m2); T(m0, b, m1); T(m2, m1, c); T(m0, m1, m2); }
+    else if (s0 && s1) { T(m0, b, m1); T(a, m0, m1); T(a, m1, c); }
+    else if (s1 && s2) { T(m1, c, m2); T(a, b, m1); T(a, m1, m2); }
+    else if (s2 && s0) { T(a, m0, m2); T(m0, b, c); T(m0, c, m2); }
+    else if (s0) { T(a, m0, c); T(m0, b, c); }
+    else if (s1) { T(a, b, m1); T(a, m1, c); }
+    else { T(a, b, m2); T(m2, b, c); }
+  }
+  for (const o of A) { const na = new BA(new o.a.array.constructor(n * o.it), o.it, o.a.normalized); for (let i = 0; i < n; i++) for (let c = 0; c < o.it; c++) na.setComponent(i, c, o.v[i * o.it + c]); g.setAttribute(o.nm, na); }
+  g.setIndex(new BA(n > 65535 ? new Uint32Array(out) : new Uint16Array(out), 1));
+  return g;
+}
+// buildings stand on the lowest ground under their footprint (no floating corners on slopes); bid < 0 parts follow the ground per vertex
+function liftBuildings(geos, ox, oy) {
+  const base = new Map();
+  for (const g of geos) {
+    const p = g.attributes.position.array, b = g.attributes.bidx.array;
+    for (let i = 0, k = 0; i < p.length; i += 3, k++) { const id = b[k]; if (id < 0) continue; const h = hAt(p[i] + ox, oy - p[i + 2]), o = base.get(id); if (o === undefined || h < o) base.set(id, h); }
+  }
+  for (const g of geos) {
+    const p = g.attributes.position.array, b = g.attributes.bidx.array;
+    for (let i = 0, k = 0; i < p.length; i += 3, k++) { const id = b[k]; p[i + 1] += id < 0 ? hAt(p[i] + ox, oy - p[i + 2]) : base.get(id); }
+  }
+}
+const DIST = IDX.districts;                                       // Saltivka microdistricts: prebuilt chunks, i = 1..30
+const CM = view(IDX.common, commonRaw), CX = view(IDX.context, ctxRaw);
+const [EX0, EY0, EX1, EY1] = IDX.extent, CELL = IDX.cell, [NX, NY] = IDX.size;
+let UX0 = 1e9, UY0 = 1e9, UX1 = -1e9, UY1 = -1e9;                 // Saltivka bounds
+for (const d of DIST) { UX0 = Math.min(UX0, d.bbox[0]); UY0 = Math.min(UY0, d.bbox[1]); UX1 = Math.max(UX1, d.bbox[2]); UY1 = Math.max(UY1, d.bbox[3]); }
+// city: 1.2 km tiles generated in the browser from compact vector data, i = 100 + k
+const TS = CITY.T, [GX0, GY0, GNX, GNY] = CITY.grid;
+const TILE_AT = new Map(CITY.tiles.map((t, k) => [t.ij[0] * 1000 + t.ij[1], k]));
+let CX0 = 1e9, CY0 = 1e9, CX1 = -1e9, CY1 = -1e9;                 // city bounds
+for (const r of CITY.city) for (const [x, y] of r) { CX0 = Math.min(CX0, x); CY0 = Math.min(CY0, y); CX1 = Math.max(CX1, x); CY1 = Math.max(CY1, y); }
+function pip(x, y, ring) { let c = false; for (let i = 0, n = ring.length, j = n - 1; i < n; j = i++) { const [x1, y1] = ring[i], [x2, y2] = ring[j]; if ((y1 > y) !== (y2 > y) && x < (x2 - x1) * (y - y1) / (y2 - y1) + x1) c = !c; } return c; }
+// neighbourhood list per district: named places plus landuse "мікрорайон"s, no housing complexes, no duplicates
+const placeOk = (p) => p.kind !== 'landuse' || /мікрорайон/i.test(p.name);
+const RAIONS = CITY.raions.map((r, ri) => {
+  const seen = new Set(), places = [];
+  for (const p of CITY.places.filter((q) => q.r === ri && placeOk(q)).sort((a, b) => (a.kind === 'landuse') - (b.kind === 'landuse') || a.name.localeCompare(b.name, 'uk'))) {
+    const k = p.name.toLowerCase(); if (seen.has(k)) continue; seen.add(k); places.push(p);
+  }
+  places.sort((a, b) => a.name.localeCompare(b.name, 'uk', { numeric: true }));
+  return { ...r, i: 1000 + ri, ri, kind: 'raion', key: r.name.replace(' район', ''), places };
+});
+const raionAt = (x, y) => RAIONS.find((r) => r.rings.some((ring) => pip(x, y, ring))) || null;
+const PLACES = CITY.places;
+function nearestPlace(x, y, maxD = 1e9) { let best = null, bd = maxD; for (const p of PLACES) { if (!placeOk(p) || /^жк|комплекс/i.test(p.name)) continue; const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = p; } } return best; }
+const CHUNKS = [];
+for (const d of DIST) { d.kind = 'micro'; d.type = 'salt'; CHUNKS.push(d); }
+CITY.tiles.forEach((t, k) => {
+  const [ti, tj] = t.ij, x0 = GX0 + ti * TS, y0 = GY0 + tj * TS, cx = x0 + TS / 2, cy = y0 + TS / 2;
+  const r = raionAt(cx, cy), p = nearestPlace(cx, cy, 1500);
+  CHUNKS.push({ i: 100 + k, k, type: 'city', key: p ? p.name : r ? r.key : `квадрат ${ti}-${tj}`, name: [p && p.name, r && r.name].filter(Boolean).join(' · ') || 'Харків',
+    bbox: [x0, y0, x0 + TS, y0 + TS], centre: [cx, cy], n: t.n, bid0: t.bid0, raion: r, file: `city/t${String(k).padStart(3, '0')}.bin.wasm?v=${VER}` });
+});
+const DBY = new Map(CHUNKS.map((d) => [d.i, d]));
+
+// owner raster: which microdistrict every 5 m cell belongs to (label = district i)
+const OWNR = new Uint8Array(NX * NY);
+{
+  const im = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = 'owner.png'; });
+  const cv = document.createElement('canvas'); cv.width = NX; cv.height = NY;
+  const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(im, 0, 0);
+  const px = cx.getImageData(0, 0, NX, NY).data; for (let i = 0; i < NX * NY; i++) OWNR[i] = px[i * 4];
+}
+const saltAt = (x, y) => { const i = Math.floor((x - EX0) / CELL), j = Math.floor((EY1 - y) / CELL); return i >= 0 && i < NX && j >= 0 && j < NY ? OWNR[j * NX + i] : 0; };
+for (const r of RAIONS) r.places = r.places.filter((p) => !saltAt(p.x, p.y));
+// chunk owning a point: Saltivka microdistrict (raster), else the city tile, else 0
+const ownerAt = (x, y) => { const s = saltAt(x, y); if (s) return s; const k = TILE_AT.get(Math.floor((x - GX0) / TS) * 1000 + Math.floor((y - GY0) / TS)); return k === undefined ? 0 : 100 + k; };
+// place shown in the header / list: the Saltivka microdistrict, else the city district (raion)
+const placeAt = (x, y) => { const s = saltAt(x, y); return s ? DBY.get(s) : raionAt(x, y); };
+
+// generator workers (module workers from gen.js; main-thread fallback if workers are blocked)
+const NW = MOBILE ? 1 : Math.min(3, Math.max(1, (navigator.hardwareConcurrency || 4) - 2));
+const workers = [];
+let genMain = null, jobId = 0;
+const jobs = new Map();
+function makeWorker() {
+  return new Promise((res) => {
+    let w;
+    try { w = new Worker(new URL(`gen.js?v=${VER}`, location.href), { type: 'module' }); } catch (e) { res(null); return; }
+    const t = setTimeout(() => res(null), 8000);
+    w.onmessage = (e) => {
+      if (e.data && e.data.ready) { clearTimeout(t); res(w); return; }
+      const j = jobs.get(e.data.id); if (!j) return; jobs.delete(e.data.id); w.busy--;
+      if (e.data.ok) j.res(e.data); else j.rej(new Error(e.data.error));
+    };
+    w.onerror = () => { clearTimeout(t); res(null); };
+    w.busy = 0;
+    w.postMessage({ op: 'ping' });
+  });
+}
+for (let k = 0; k < NW; k++) { const w = await makeWorker(); if (!w) break; workers.push(w); }
+if (!workers.length) genMain = await import(new URL(`gen.js?v=${VER}`, location.href).href);
+async function runGen(op, url, opts) {
+  if (genMain) {
+    const buf = await genMain.gunzip(await (await fetch(url)).arrayBuffer());
+    await new Promise((r) => setTimeout(r, 0));
+    return op === 'tile' ? genMain.generateTile(buf, opts) : { res: genMain.generateCtx(buf, opts.tiles, opts.T, opts.gx0, opts.gy0) };
+  }
+  const w = workers.reduce((a, b) => (b.busy < a.busy ? b : a));
+  w.busy++;
+  const id = ++jobId;
+  return new Promise((res, rej) => { jobs.set(id, { res, rej }); w.postMessage({ id, op, url: new URL(url, location.href).href, opts }); });
+}
+
+// ---------------------------------------------------------------- renderer / scene
+msg('побудова сцени…');
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE || devicePixelRatio < 2, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(innerWidth < innerHeight ? 58 : 42, innerWidth / innerHeight, 2, 250000);   // wider in portrait; far: the ground reaches the horizon
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 25; controls.maxDistance = 42000;
+controls.screenSpacePanning = false;
+
+const sky = new Sky(); sky.scale.setScalar(200000); sky.renderOrder = -10; scene.add(sky);   // first: the ground is drawn over it without depth   // follows the camera (see draw): never left behind over the far city
+const su = sky.material.uniforms;
+su.turbidity.value = 4.5; su.rayleigh.value = 1.4; su.mieCoefficient.value = 0.004; su.mieDirectionalG.value = 0.8;
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envScene = new THREE.Scene(); const envSky = new Sky(); envSky.scale.setScalar(9000); envScene.add(envSky);
+let envRT = null;
+
+const sun = new THREE.DirectionalLight(0xfff1df, 2.6);
+sun.castShadow = true;
+sun.shadow.mapSize.setScalar(MOBILE ? 2048 : 4096);
+Object.assign(sun.shadow.camera, { left: -760, right: 760, top: 760, bottom: -760, near: 10, far: 4000 });
+sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.08;
+const sunDir = new THREE.Vector3(0, 1, 0);
+scene.add(sun, sun.target);
+const hemi = new THREE.HemisphereLight(0xc9dcf2, 0x56604a, 0.4); scene.add(hemi);
+scene.fog = new THREE.Fog(0xc7d2dc, 900, 2600);
+
+// shadow frustum follows the camera target: tight (sharp) when close, wider when far
+const shX = new THREE.Vector3(), shY = new THREE.Vector3(), Y_UP = new THREE.Vector3(0, 1, 0);
+function fitShadow(rForce) {
+  const d = camera.position.distanceTo(controls.target);
+  let R = rForce || THREE.MathUtils.clamp(d * (MOBILE ? 0.7 : 0.85), 60, MOBILE ? 500 : 800);
+  if (!rForce) R = Math.pow(2, Math.ceil(Math.log2(R) * 4) / 4);            // 19 % steps: no creeping shadow edges while zooming
+  // snap the centre to the shadow map's texel grid (in the light's own axes): edges stay put while panning
+  const tx = 2 * R / sun.shadow.mapSize.x, zA = sunDir, xA = shX.crossVectors(Y_UP, zA);
+  if (xA.lengthSq() < 1e-6) xA.set(1, 0, 0); else xA.normalize();
+  const yA = shY.crossVectors(zA, xA);
+  const c = controls.target, cu = c.x * xA.x + c.z * xA.z, cv = c.x * yA.x + c.z * yA.z;   // the ground point under the target
+  const du = Math.round(cu / tx) * tx - cu, dv = Math.round(cv / tx) * tx - cv;
+  sun.target.position.set(c.x + xA.x * du + yA.x * dv, c.y + yA.y * dv, c.z + xA.z * du + yA.z * dv);
+  sun.position.copy(sun.target.position).addScaledVector(sunDir, 2500);
+  const sc = sun.shadow.camera; sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 100; sc.far = 5000; sc.updateProjectionMatrix();
+  sun.shadow.normalBias = 0.03 + 0.75 * (2 * R / sun.shadow.mapSize.x);   // about one shadow texel
+  sun.target.updateMatrixWorld();
+  renderer.shadowMap.needsUpdate = true;
+}
+let shadowDirty = true;
+controls.addEventListener('change', () => { shadowDirty = true; });
+let dirty = 3;                                    // frames still to draw; anything that changes the picture bumps it
+const invalidate = () => { dirty = Math.max(dirty, 2); };
+
+// ---------------------------------------------------------------- shared materials
+const selU = { value: -1 };
+const sunU = { value: new THREE.Vector3(0, 1, 0) };
+// one texel per chunk (Saltivka 1..30, city tiles 100+k): 255 = loaded in full detail, its overview geometry collapses
+const HIDE_N = 512, hideData = new Uint8Array(HIDE_N * 4);
+const hideTex = new THREE.DataTexture(hideData, HIDE_N, 1); hideTex.needsUpdate = true;
+const hideU = { value: hideTex };
+const setHidden = (i, on) => { hideData[i * 4] = on ? 255 : 0; hideTex.needsUpdate = true; };
+const isHidden = (i) => hideData[i * 4] > 0;
+setHidden(0, true);   // Saltivka's old context outside the microdistricts (owner 0): the city overview draws that area now
+@@SRGB@@
+
+// grass / bare ground / concrete driven by a surface-type mask (R bare ground, G concrete/asphalt yards, B mapped lawns)
+function makeSurfMat(mask, g0, gs, opts = {}) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, ...opts });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uMask = { value: mask };
+    sh.uniforms.uG0 = { value: new THREE.Vector2(g0[0], g0[1]) };
+    sh.uniforms.uGS = { value: new THREE.Vector2(gs[0], gs[1]) };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGP;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uMask; uniform vec2 uG0; uniform vec2 uGS; varying vec3 vGP;\n' + SRGB)
+@@SURF@@
+      .replace('diffuseColor.rgb = c;', 'diffuseColor.rgb = mix(c, toLin(vec3(0.40, 0.45, 0.25)) * (0.92 + 0.12 * mk.g), smoothstep(0.6, 3.5, px) * (1.0 - 0.6 * hA));')
+  };
+  return m;
+}
+const blackTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); blackTex.needsUpdate = true;
+{
+  // The ground and every layer on it (district patches, roads, paths, yards) are drawn in painter's order WITHOUT depth writes,
+  // so they never fight each other; only afterwards a depth-only copy of the ground, 30 cm lower and finely gridded (a 400 km
+  // two-triangle plane has centimetre-scale depth errors: roads and water used to blink through it whenever the camera moved),
+  // gives the rest of the scene its ground occlusion.
+  // With relief: the terrain (DEM grid, 60 m / 90 m on phones) plus a flat frame out to the horizon at the grid's edge height.
+  // A depth-only copy 3 m lower is drawn FIRST, so ground layers behind a hill stay hidden by it; the final depth copy (1 m
+  // lower: the coarser mesh may sit a little above the exact ground under a car or a wall) occludes everything else.
+  const D = DEM, st = MOBILE ? 3 : 2, nx = Math.floor((D.nx - 1) / st) + 1, ny = Math.floor((D.ny - 1) / st) + 1;
+  const tp = new Float32Array(nx * ny * 3), ti = new Uint32Array((nx - 1) * (ny - 1) * 6);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = (j * nx + i) * 3; tp[k] = D.x0 + i * st * D.dx; tp[k + 1] = D.h[j * st * D.nx + i * st] * 0.1; tp[k + 2] = -(D.y0 + j * st * D.dx); }
+  for (let j = 0, o = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx + 1, d = a + nx; ti.set([a, b, c, a, c, d], o); o += 6; }
+  const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new BA(tp, 3)); tg.setIndex(new BA(ti, 1)); tg.computeVertexNormals();
+  // frame: 4 gridded rectangles around the DEM, ~3 km cells (depth precision), out to 200 km
+  const fp = [], fi = [], X0 = D.x0, Y0 = D.y0, X1 = D.x0 + (D.nx - 1) * D.dx, Y1 = D.y0 + (D.ny - 1) * D.dx, R = 200000, cxm = (X0 + X1) / 2, cym = (Y0 + Y1) / 2;
+  const rect = (x0, y0, x1, y1) => {
+    const n = Math.max(1, Math.ceil((x1 - x0) / 3000)), m = Math.max(1, Math.ceil((y1 - y0) / 3000)), b0 = fp.length / 3;
+    for (let j = 0; j <= m; j++) for (let i = 0; i <= n; i++) fp.push(x0 + (x1 - x0) * i / n, D.base, -(y0 + (y1 - y0) * j / m));
+    for (let j = 0; j < m; j++) for (let i = 0; i < n; i++) { const a = b0 + j * (n + 1) + i, b = a + 1, c = a + n + 2, d = a + n + 1; fi.push(a, b, c, a, c, d); }
+  };
+  rect(cxm - R, cym - R, cxm + R, Y0); rect(cxm - R, Y1, cxm + R, cym + R); rect(cxm - R, Y0, X0, Y1); rect(X1, Y0, cxm + R, Y1);
+  const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new BA(new Float32Array(fp), 3)); fg.setAttribute('normal', upNormals(fp.length / 3)); fg.setIndex(new BA(new Uint32Array(fi), 1));
+  const gMat = makeSurfMat(blackTex, [0, 0], [1, 1], { depthWrite: false }), dMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+  for (const geo of [tg, fg]) {
+    const pre = new THREE.Mesh(geo, dMat); pre.position.y = -3; pre.renderOrder = -3;
+    const col = new THREE.Mesh(geo, gMat); col.position.y = -0.05; col.renderOrder = -2; col.receiveShadow = true;
+    const fin = new THREE.Mesh(geo, dMat); fin.position.y = -1; fin.renderOrder = -0.5;
+    for (const m of [pre, col, fin]) { m.raycast = () => {}; m.frustumCulled = geo === tg; scene.add(m); }
+  }
+}
+const waterMat = new THREE.MeshStandardMaterial({ color: 0x0d1d1a, roughness: 0.08, metalness: 0.2 });
+
+// road / pitch / playground surfaces: layers a few cm apart, drawn in painter's order without depth writes
+const gndMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+@@GND@@
+
+@@PATCH@@
+
+@@WALL@@
+
+@@WIN@@
+
+@@RESTFRAG@@
+const REST_ORDER = [1, 2, 3, 4];
+const restMats = REST_ORDER.map((mat) => {
+  const props = { 1: { roughness: 0.82 }, 2: { roughness: 0.9 }, 3: { roughness: 0.06, metalness: 0.3 }, 4: { roughness: 0.45, metalness: 0.5 } }[mat];
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, ...props });
+  m.onBeforeCompile = (sh) => {
+    patchCommon(sh);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `${REST_FRAG[mat]} ${SEL_FRAG}`);
+    if (mat === 4) sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>',   // illuminated shop signs
+      `#include <emissivemap_fragment>
+if (vColor.r > 0.8 && vColor.g < 0.12 && vColor.b < 0.12) totalEmissiveRadiance += toLin(vColor) * 0.9;`);
+  };
+  return m;
+});
+
+// trees: shared light models per species (full + far LOD), instanced per microdistrict
+const leafTex = await loadTex('leaves.png');
+leafTex.colorSpace = THREE.SRGBColorSpace;
+const treeGroup = new THREE.Group(); scene.add(treeGroup);
+const barkMat = new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.95 });
+const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.45, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.8 });   // A2C: soft leaf edges under MSAA, no sparkle while moving
+const leafDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: leafTex, alphaTest: 0.45 });
+const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+let TREE_LOD = MOBILE ? 110 : 240;   // metres: full model inside, light model (fewer cards, no twigs) outside
+function treeParts(si, lod) {
+  const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new BA(xyzToThree(CM(`tree${si}_${lod}bark_pos`)), 3));
+  bg.setIndex(new BA(CM(`tree${si}_${lod}bark_idx`), 1)); bg.computeVertexNormals();
+  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new BA(xyzToThree(CM(`tree${si}_${lod}leaf_pos`)), 3));
+  lg.setAttribute('uv', new BA(CM(`tree${si}_${lod}leaf_uv`), 2));
+  lg.setIndex(new BA(CM(`tree${si}_${lod}leaf_idx`), 1)); lg.computeVertexNormals();
+  // leaf normals point up/outwards so crowns are lit like a volume
+  const p = lg.attributes.position, n = lg.attributes.normal;
+  for (let i = 0; i < p.count; i++) { v.set(p.getX(i), p.getY(i) - 9, p.getZ(i)).normalize(); v.y = v.y * 0.6 + 0.4; v.normalize(); n.setXYZ(i, v.x, v.y, v.z); }
+  return [bg, lg];
+}
+const TREE_GEO = IDX.common.species.map((sp, si) => ({ hi: treeParts(si, ''), lo: treeParts(si, 'lo_') }));
+const treeSets = [];
+function updateTreeLod() {
+  const cp = camera.position, h2 = TREE_LOD * TREE_LOD, y2 = (cp.y - controls.target.y) ** 2;
+  for (const S of treeSets) {
+    let nh = 0, nl = 0;
+    const [hb, hl] = S.hi, [lb, ll] = S.lo;
+    for (let j = 0; j < S.n; j++) {
+      const dx = S.pos[j * 2] - cp.x, dz = S.pos[j * 2 + 1] - cp.z, near = dx * dx + dz * dz + y2 < h2;
+      const mm = S.mats.subarray(j * 16, j * 16 + 16), cc = S.cols.subarray(j * 3, j * 3 + 3);
+      if (near) { hb.instanceMatrix.array.set(mm, nh * 16); hl.instanceMatrix.array.set(mm, nh * 16); hl.instanceColor.array.set(cc, nh * 3); nh++; }
+      else { lb.instanceMatrix.array.set(mm, nl * 16); ll.instanceMatrix.array.set(mm, nl * 16); ll.instanceColor.array.set(cc, nl * 3); nl++; }
+    }
+    hb.count = hl.count = nh; lb.count = ll.count = nl;
+    for (const m of [hb, hl, lb, ll]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
+}
+
+// cars: 5 shared models (full + far LOD), instanced per microdistrict
+const carGroup = new THREE.Group(); scene.add(carGroup);
+@@CAR@@
+let CAR_LOD = MOBILE ? { hi: 60, lo: 420 } : { hi: 140, lo: 1400 };
+function carGeo(pre) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new BA(xyzToThree(CM(`${pre}_pos`)), 3));
+  const cc = CM(`${pre}_col`), vc = new Float32Array(cc.length);
+  for (let i = 0; i < cc.length; i++) vc[i] = Math.pow(cc[i] / 255, 2.2);
+  g.setAttribute('color', new BA(vc, 3));
+  g.setAttribute('ckind', new BA(new Float32Array(CM(`${pre}_kind`)), 1));
+  g.setIndex(new BA(CM(`${pre}_idx`), 1));
+  return toCreasedNormals(g.toNonIndexed(), THREE.MathUtils.degToRad(32));   // smooth panels, crisp edges
+}
+const CAR_GEO = []; for (let k = 0; k < IDX.common.ncar; k++) CAR_GEO.push({ hi: carGeo(`car${k}_hi`), lo: carGeo(`car${k}_lo`) });
+const carSets = [];
+const lastLod = new THREE.Vector3(1e9, 0, 0);
+function updateCarLod(force) {
+  const cp = camera.position;
+  if (!force && cp.distanceToSquared(lastLod) < 64) return false;
+  lastLod.copy(cp);
+  updateTreeLod();
+  const h2 = CAR_LOD.hi * CAR_LOD.hi, l2 = CAR_LOD.lo * CAR_LOD.lo, y2 = (cp.y - controls.target.y) ** 2;
+  for (const S of carSets) {
+    let nh = 0, nl = 0;
+    const hm = S.hi.instanceMatrix.array, lm = S.lo.instanceMatrix.array, hc = S.hi.instanceColor.array, lc = S.lo.instanceColor.array;
+    for (let j = 0; j < S.n; j++) {
+      const dx = S.pos[j * 2] - cp.x, dz = S.pos[j * 2 + 1] - cp.z, d2 = dx * dx + dz * dz + y2;
+      if (d2 < h2) { hm.set(S.mats.subarray(j * 16, j * 16 + 16), nh * 16); hc.set(S.cols.subarray(j * 3, j * 3 + 3), nh * 3); nh++; }
+      else if (d2 < l2) { lm.set(S.mats.subarray(j * 16, j * 16 + 16), nl * 16); lc.set(S.cols.subarray(j * 3, j * 3 + 3), nl * 3); nl++; }
+    }
+    S.hi.count = nh; S.lo.count = nl;
+    for (const im of [S.hi, S.lo]) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; }
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------- low-detail context of all Saltivka
+// prisms of every building, main roads, tree blobs; each vertex knows its microdistrict and disappears once that one is loaded
+const HIDE = (a) => `if (texture2D(uHide, vec2((${a} + 0.5) / ${HIDE_N}.0, 0.5)).r > 0.5) transformed = vec3(0.0);`;
+const ctxMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+ctxMat.onBeforeCompile = (sh) => {
+  sh.uniforms.uHide = hideU;
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute float own; attribute float wk; attribute float gz; uniform sampler2D uHide; varying vec3 vCP; varying float vWk; varying vec3 vCN;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCP = transformed; vCP.y -= gz; vWk = wk; vCN = objectNormal;\n' + HIDE('own'));
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying vec3 vCP; varying float vWk; varying vec3 vCN;\n' + SRGB)
+    .replace('#include <color_fragment>', /* glsl */`
+    vec3 c = toLin(vColor);
+    if (vWk > 1.5 && abs(vCN.y) < 0.5) {                 // apartment walls: window grid that fades to its average far away
+      vec2 t = normalize(vec2(-vCN.z, vCN.x));
+      float u = dot(vCP.xz, t), z = vCP.y;
+      float px = max(fwidth(u), fwidth(z));
+      float fade = 1.0 - smoothstep(0.3, 1.0, px);
+      float gx = fract(u / 3.0), gz = fract((z - 1.0) / 2.8);
+      float win = step(0.27, gx) * step(gx, 0.73) * step(0.32, gz) * step(gz, 0.80) * step(1.8, z);
+      vec3 dark = vec3(0.045, 0.05, 0.055);
+      c = mix(mix(c, dark, 0.28), mix(c, dark, win * 0.85), fade);
+      c *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 3.0, z));
+    }
+    diffuseColor.rgb = c;`);
+};
+const ctxGeo = new THREE.BufferGeometry();
+ctxGeo.setAttribute('position', new BA(xyzToThree(CX('ctx_pos')), 3)); dispGz(ctxGeo);
+ctxGeo.setAttribute('color', new BA(CX('ctx_col'), 3, true));
+ctxGeo.setAttribute('own', new BA(new Float32Array(CX('ctx_own')), 1));
+ctxGeo.setAttribute('wk', new BA(new Float32Array(CX('ctx_k')), 1));
+ctxGeo.setIndex(new BA(CX('ctx_idx'), 1)); ctxGeo.computeVertexNormals();
+const ctxMesh = new THREE.Mesh(ctxGeo, ctxMat); ctxMesh.receiveShadow = true; scene.add(ctxMesh);
+const ctxRMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+ctxRMat.onBeforeCompile = (sh) => {
+  sh.uniforms.uHide = hideU;
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float own; uniform sampler2D uHide;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + HIDE('own'));
+};
+{
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new BA(xyzToThree(CX('ctxr_pos')), 3)); g.setAttribute('color', new BA(CX('ctxr_col'), 3, true));
+  g.setAttribute('own', new BA(new Float32Array(CX('ctxr_own')), 1)); g.setAttribute('normal', upNormals(g.attributes.position.count));
+  g.setIndex(new BA(CX('ctxr_idx'), 1)); tessGeo(g, 40); dispArr(g.attributes.position.array);
+  const m = new THREE.Mesh(g, ctxRMat); m.renderOrder = -1.2; m.receiveShadow = true; scene.add(m);
+}
+const ctxTreeGroup = new THREE.Group(); scene.add(ctxTreeGroup);
+const blobMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92 });
+blobMat.onBeforeCompile = (sh) => {
+  sh.uniforms.uHide = hideU;
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float iown; uniform sampler2D uHide;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + HIDE('iown'));
+};
+const ctxWaterMat = waterMat.clone();
+ctxWaterMat.polygonOffset = true; ctxWaterMat.polygonOffsetFactor = -2; ctxWaterMat.polygonOffsetUnits = -4;   // 6 cm above the ground: keep it on top when far away
+ctxWaterMat.onBeforeCompile = (sh) => {
+  sh.uniforms.uHide = hideU;
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float own; uniform sampler2D uHide;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + HIDE('own'));
+};
+{
+  const T = CX('ctxt'), n0 = T.length / 5, step = MOBILE ? 2 : 1, n = Math.ceil(n0 / step);
+  const g = new THREE.IcosahedronGeometry(1, 0);
+  const p = g.attributes.position, nn = g.attributes.normal;
+  for (let i = 0; i < p.count; i++) { v.set(p.getX(i), p.getY(i) * 0.8 + 0.25, p.getZ(i)).normalize(); nn.setXYZ(i, v.x, v.y, v.z); }
+  const own = new Float32Array(n);
+  const im = new THREE.InstancedMesh(g, blobMat, n);
+  for (let k = 0, i = 0; i < n0; i += step, k++) {
+    const o = i * 5, h = T[o + 2], r = T[o + 3];
+    m4.compose(v.set(T[o], h * 0.6 + hAt(T[o], T[o + 1]), -T[o + 1]), q.setFromAxisAngle(Y_AXIS, r * 6.28), sc.set(h * 0.3, h * 0.36, h * 0.3)); im.setMatrixAt(k, m4);
+    col.setRGB(0.20 + r * 0.08, 0.30 + r * 0.06, 0.12 + r * 0.04, THREE.SRGBColorSpace); im.setColorAt(k, col);
+    own[k] = T[o + 4];
+  }
+  g.setAttribute('iown', new THREE.InstancedBufferAttribute(own, 1));
+  ctxTreeGroup.add(im);
+}
+
+// ---------------------------------------------------------------- low-detail context of the whole city (generated in a worker)
+// 3 x 3 tile blocks: building prisms (pitched roofs on houses), main roads, water, tree blobs; tagged with their tile
+const cityCtx = [];
+const freeAfterUpload = (g) => { for (const a of Object.values(g.attributes)) a.onUpload(function () { this.array = null; }); if (g.index) g.index.onUpload(function () { this.array = null; }); };
+const BLOB_GEO = (() => {
+  const g = new THREE.OctahedronGeometry(1, 0);
+  const p = g.attributes.position, nn = g.attributes.normal;
+  for (let i = 0; i < p.count; i++) { v.set(p.getX(i), p.getY(i) * 0.8 + 0.3, p.getZ(i)).normalize(); nn.setXYZ(i, v.x, v.y, v.z); }
+  return g;
+})();
+async function loadCityCtx() {
+  const { res } = await runGen('ctx', `city/ctx.bin.wasm?v=${VER}`, { tiles: CITY.tiles, T: TS, gx0: GX0, gy0: GY0 });
+  for (const B of res) {
+    const blk = { key: B.key, meshes: [], trees: null };
+    if (B.idx.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new BA(B.pos, 3)); dispGz(g); g.setAttribute('color', new BA(B.col, 3, true));
+      g.setAttribute('own', new BA(B.own, 1)); g.setAttribute('wk', new BA(B.wk, 1)); g.setAttribute('normal', new BA(B.nrm, 3, true));
+      g.setIndex(new BA(B.idx, 1)); g.computeBoundingSphere(); freeAfterUpload(g);
+      const m = new THREE.Mesh(g, ctxMat); m.receiveShadow = true; scene.add(m); blk.meshes.push(m);
+      blk.c = g.boundingSphere.center.clone();
+    }
+    if (B.ridx.length) {
+      const g = new THREE.BufferGeometry(), n = B.rown.length;
+      g.setAttribute('position', new BA(B.rpos, 3)); g.setAttribute('color', new BA(new Uint8Array(n * 3).fill(70), 3, true));
+      g.setAttribute('own', new BA(B.rown, 1)); g.setAttribute('normal', upNormals(n));
+      g.setIndex(new BA(B.ridx, 1)); tessGeo(g, 40); dispArr(g.attributes.position.array); g.computeBoundingSphere(); freeAfterUpload(g);
+      const m = new THREE.Mesh(g, ctxRMat); m.renderOrder = -1.2; m.receiveShadow = true; scene.add(m); blk.meshes.push(m);
+      if (!blk.c) blk.c = g.boundingSphere.center.clone();
+    }
+    if (B.wpos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new BA(B.wpos, 3)); g.setAttribute('own', new BA(B.wown, 1)); g.setAttribute('normal', upNormals(B.wown.length));
+      tessGeo(g, 40); dispArr(g.attributes.position.array); g.computeBoundingSphere(); freeAfterUpload(g);
+      const m = new THREE.Mesh(g, ctxWaterMat); scene.add(m); blk.meshes.push(m);
+    }
+    const T = B.tr, n0 = T.length / 5, step = MOBILE ? 2 : 1, n = Math.ceil(n0 / step);
+    if (n) {
+      const im = new THREE.InstancedMesh(BLOB_GEO, blobMat, n), own = new Float32Array(n);
+      let cx = 0, cz = 0;
+      for (let k = 0, i = 0; i < n0; i += step, k++) {
+        const o = i * 5, h = T[o + 2], r = T[o + 3], s = MOBILE ? 1.2 : 1;
+        m4.compose(v.set(T[o], h * 0.6 + hAt(T[o], T[o + 1]), -T[o + 1]), q.setFromAxisAngle(Y_AXIS, r * 6.28), sc.set(h * 0.42 * s, h * 0.38, h * 0.42 * s)); im.setMatrixAt(k, m4);
+        col.setRGB(0.20 + r * 0.08, 0.30 + r * 0.06, 0.12 + r * 0.04, THREE.SRGBColorSpace); im.setColorAt(k, col);
+        own[k] = T[o + 4]; cx += T[o]; cz -= T[o + 1];
+      }
+      im.geometry = BLOB_GEO.clone(); im.geometry.setAttribute('iown', new THREE.InstancedBufferAttribute(own, 1));
+      im.computeBoundingSphere(); ctxTreeGroup.add(im); blk.trees = im;
+      if (!blk.c) blk.c = new THREE.Vector3(cx / n, hAt(cx / n, -cz / n), cz / n);
+    }
+    cityCtx.push(blk);
+  }
+  renderer.shadowMap.needsUpdate = true; invalidate();
+}
+// far tree blobs only within a radius of the view (they are the bulk of the overview's triangles)
+function cullCtx() {
+  const R = MOBILE ? 6500 : 13000, t = controls.target, cp = camera.position;
+  for (const b of cityCtx) {
+    if (!b.trees || !b.c) continue;
+    const d = Math.min(Math.hypot(b.c.x - t.x, b.c.z - t.z), Math.hypot(b.c.x - cp.x, b.c.z - cp.z));
+    const vis = b.trees.visible ? d < R + 2600 : d < R + 1800;
+    if (b.trees.visible !== vis) { b.trees.visible = vis; renderer.shadowMap.needsUpdate = true; }
+  }
+}
+
+// ---------------------------------------------------------------- district borders (from the owner raster)
+// a border line draped over the ground: pieces of at most 40 m
+function segH(P, x0, y0, x1, y1) {
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 40));
+  for (let k = 0; k < n; k++) {
+    const xa = x0 + (x1 - x0) * k / n, ya = y0 + (y1 - y0) * k / n, xb = x0 + (x1 - x0) * (k + 1) / n, yb = y0 + (y1 - y0) * (k + 1) / n;
+    P.push(xa, hAt(xa, ya), -ya, xb, hAt(xb, yb), -yb);
+  }
+}
+function borderSegs(keep) {
+  const P = [];
+  const push = (x0, y0, x1, y1) => segH(P, x0, y0, x1, y1);
+  for (let j = 1; j < NY; j++) {                     // horizontal edges between rows j-1 and j
+    let run = -1; const y = EY1 - j * CELL;
+    for (let i = 0; i <= NX; i++) {
+      const on = i < NX && OWNR[(j - 1) * NX + i] !== OWNR[j * NX + i] && keep(OWNR[(j - 1) * NX + i], OWNR[j * NX + i]);
+      if (on && run < 0) run = i;
+      if (!on && run >= 0) { push(EX0 + run * CELL, y, EX0 + i * CELL, y); run = -1; }
+    }
+  }
+  for (let i = 1; i < NX; i++) {                     // vertical edges between columns i-1 and i
+    let run = -1; const x = EX0 + i * CELL;
+    for (let j = 0; j <= NY; j++) {
+      const on = j < NY && OWNR[j * NX + i - 1] !== OWNR[j * NX + i] && keep(OWNR[j * NX + i - 1], OWNR[j * NX + i]);
+      if (on && run < 0) run = j;
+      if (!on && run >= 0) { push(x, EY1 - run * CELL, x, EY1 - j * CELL); run = -1; }
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new BA(new Float32Array(P), 3)); return g;
+}
+const borders = new THREE.LineSegments(borderSegs(() => true), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }));
+borders.position.y = 0.6; borders.renderOrder = 4; scene.add(borders);
+function ringSegs(rings) {
+  const P = [];
+  for (const r of rings) for (let i = 0, n = r.length; i < n; i++) { const a = r[i], b = r[(i + 1) % n]; segH(P, a[0], a[1], b[0], b[1]); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new BA(new Float32Array(P), 3)); return g;
+}
+const raionLines = new THREE.LineSegments(ringSegs(RAIONS.flatMap((r) => r.rings)), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false }));
+raionLines.position.y = 0.8; raionLines.renderOrder = 4; scene.add(raionLines);
+const focusLine = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x2f6fd6, transparent: true, opacity: 0.95, depthWrite: false }));
+focusLine.position.y = 0.9; focusLine.renderOrder = 5; scene.add(focusLine);
+
+// ---------------------------------------------------------------- microdistrict chunks
+const chunks = new Map(), pending = new Map();
+const BLD = new Map();           // global building id -> { b, ch }
+const BY_OSM = new Map();        // osm id -> global building id (loaded only)
+let useTick = 0;
+
+// buildings whose real look is known from photos (OSM has no colour for them): facade / end walls, sRGB 0..1
+const KNOWN_LOOK = {
+  // osm way id: { facade: [r, g, b], end: [r, g, b], src: 'where the look comes from' }   (sRGB 0..1)
+};
+function buildChunk(d, M, raw, maskTex) {
+  const H = M.header, arr = typeof raw === 'function' ? raw : view(H, raw), [ox, oy] = M.off;
+  const grp = new THREE.Group(); grp.position.set(ox, 0, -oy); scene.add(grp);
+  const ch = { d, M, grp, geos: [], inst: [], treeSets: [], carSets: [], pick: [], maskTex, used: ++useTick };
+  const add = (g, m, ro = 0, cast = true) => { const o = new THREE.Mesh(g, m); o.receiveShadow = true; o.castShadow = cast; o.renderOrder = ro; ch.geos.push(g); grp.add(o); return o; };
+  // the district's own ground patch (owned 5 m cells) with its surface-type mask
+  {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new BA(xyzToThree(arr('cell_pos')), 3));
+    g.setAttribute('normal', upNormals(g.attributes.position.count)); g.setIndex(new BA(arr('cell_idx'), 1));
+    tessGeo(g, 20); dispArr(g.attributes.position.array, ox, oy);
+    const [mx0, my0, mx1, my1] = M.mask;
+    ch.cellMat = makeSurfMat(maskTex, [mx0, my0], [mx1 - mx0, my1 - my0], { depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const o = add(g, ch.cellMat, -1.5, false); o.position.y = -0.04;
+  }
+  {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new BA(xyzToThree(arr('gnd_pos')), 3));
+    g.setAttribute('color', new BA(arr('gnd_col'), 3, true));
+    g.setAttribute('pat', new BA(new Float32Array(arr('gnd_pat')), 1));
+    g.setIndex(new BA(arr('gnd_idx'), 1)); g.setAttribute('normal', upNormals(g.attributes.position.count));
+    tessGeo(g, 20); dispArr(g.attributes.position.array, ox, oy);
+    add(g, gndMat, -1, false);
+  }
+  if (arr('water_pos').length) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new BA(xyzToThree(arr('water_pos')), 3));
+    tessGeo(g, 20); dispArr(g.attributes.position.array, ox, oy); g.computeVertexNormals();
+    add(g, waterMat, 0, false);
+  }
+  // facade walls
+  const wallGeo = new THREE.BufferGeometry();
+  wallGeo.setAttribute('position', new BA(xyzToThree(arr('wall_pos')), 3));
+  wallGeo.setAttribute('wuv', new BA(arr('wall_uv'), 2));
+  ch.wallCol = new Uint8Array(arr('wall_col'));
+  wallGeo.setAttribute('color', new BA(ch.wallCol, 3, true));
+  wallGeo.setAttribute('p1', new BA(arr('wall_p1'), 4));
+  wallGeo.setAttribute('p2', new BA(arr('wall_p2'), 4));
+  wallGeo.setAttribute('bidx', new BA(new Float32Array(arr('wall_bid')), 1));
+  wallGeo.setIndex(new BA(arr('wall_idx'), 1)); wallGeo.computeVertexNormals();
+  ch.pick.push(add(wallGeo, wallMat)); const liftG = [wallGeo];
+  // glazing
+  if (arr('win_pos').length) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new BA(xyzToThree(arr('win_pos')), 3));
+    g.setAttribute('wuv', new BA(arr('win_uv'), 2));
+    g.setAttribute('wp', new BA(arr('win_wp'), 4));
+    g.setAttribute('color', new BA(arr('win_col'), 3, true));
+    g.setAttribute('bidx', new BA(new Float32Array(arr('win_bid')), 1));
+    g.setIndex(new BA(arr('win_idx'), 1)); g.computeVertexNormals();
+    ch.pick.push(add(g, winMat)); liftG.push(g);
+  }
+  // roofs, balconies, details
+  const restGeo = new THREE.BufferGeometry();
+  restGeo.setAttribute('position', new BA(xyzToThree(arr('rest_pos'), H.rest_q), 3));
+  ch.restCol = new Uint8Array(arr('rest_col'));
+  restGeo.setAttribute('color', new BA(ch.restCol, 3, true));
+  restGeo.setAttribute('bidx', new BA(new Float32Array(arr('rest_bid')), 1));
+  restGeo.setIndex(new BA(arr('rest_idx'), 1)); restGeo.computeVertexNormals();
+  for (const g of H.rest_groups) if (g.count) restGeo.addGroup(g.start, g.count, REST_ORDER.indexOf(g.mat));
+  ch.pick.push(add(restGeo, restMats)); liftG.push(restGeo);
+  // street furniture
+  if (arr('prop_pos').length) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new BA(xyzToThree(arr('prop_pos')), 3));
+    g.setAttribute('color', new BA(arr('prop_col'), 3, true));
+    g.setAttribute('bidx', new BA(new Float32Array(arr('prop_pos').length / 3).fill(-1), 1));
+    g.setIndex(new BA(arr('prop_idx'), 1)); g.computeVertexNormals();
+    for (const pg of H.prop_groups) if (pg.count) g.addGroup(pg.start, pg.count, REST_ORDER.indexOf(pg.mat));
+    add(g, restMats); liftG.push(g);
+  }
+  liftBuildings(liftG, ox, oy);
+  ch.wallGeo = wallGeo; ch.restGeo = restGeo;
+  ch.wallCk = arr('wall_ck'); ch.restCk = arr('rest_ck');
+  ch.wallIdx = indexBy(arr('wall_bid'), ch.wallCk); ch.restIdx = indexBy(arr('rest_bid'), ch.restCk);
+  // trees
+  const T = arr('trees'), nT = T.length / 6;
+  IDX.common.species.forEach((sp, si) => {
+    const ids = []; for (let i = 0; i < nT; i++) if (T[i * 6 + 4] === si && (!MOBILE || T[i * 6 + 5] < 0.72 || T[i * 6 + 2] > 0.95)) ids.push(i);
+    if (!ids.length) return;
+    const mats = new Float32Array(ids.length * 16), cols = new Float32Array(ids.length * 3), pos = new Float32Array(ids.length * 2);
+    ids.forEach((i, k) => {
+      const o = i * 6, s = T[o + 2];
+      q.setFromAxisAngle(Y_AXIS, T[o + 3]);
+      m4.compose(v.set(T[o], hAt(T[o], T[o + 1]), -T[o + 1]), q, sc.set(s, s, s)); m4.toArray(mats, k * 16);
+      const r = T[o + 5]; col.setRGB(0.78 + r * 0.42, 0.85 + r * 0.25, 0.62 + r * 0.25); col.toArray(cols, k * 3);
+      pos[k * 2] = T[o]; pos[k * 2 + 1] = -T[o + 1];
+    });
+    const set = { n: ids.length, mats, cols, pos };
+    for (const lod of ['hi', 'lo']) {
+      const [bg, lg] = TREE_GEO[si][lod];
+      const bark = new THREE.InstancedMesh(bg, barkMat, ids.length);
+      const leaves = new THREE.InstancedMesh(lg, leafMat, ids.length);
+      leaves.customDepthMaterial = leafDepth; leaves.setColorAt(0, col);
+      for (const m of [bark, leaves]) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; treeGroup.add(m); ch.inst.push(m); }
+      set[lod] = [bark, leaves];
+    }
+    ch.treeSets.push(set); treeSets.push(set);
+  });
+  // cars
+  const C = arr('cars'), nC = C.length / 7;
+  for (let k = 0; k < IDX.common.ncar; k++) {
+    const ids = []; for (let i = 0; i < nC; i++) if (C[i * 7 + 3] === k) ids.push(i);
+    if (!ids.length) continue;
+    const mats = new Float32Array(ids.length * 16), cols = new Float32Array(ids.length * 3), pos = new Float32Array(ids.length * 2);
+    ids.forEach((i, j) => {
+      const o = i * 7;
+      q.setFromAxisAngle(Y_AXIS, C[o + 2]);
+      m4.compose(v.set(C[o], 0.045 + hAt(C[o], C[o + 1]), -C[o + 1]), q, sc.set(1, 1, 1)); m4.toArray(mats, j * 16);
+      col.setRGB(C[o + 4], C[o + 5], C[o + 6], THREE.SRGBColorSpace); col.toArray(cols, j * 3);
+      pos[j * 2] = C[o]; pos[j * 2 + 1] = -C[o + 1];
+    });
+    const mk = (lod) => {
+      const im = new THREE.InstancedMesh(CAR_GEO[k][lod], carMat, ids.length);
+      im.setColorAt(0, col); im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false; im.count = 0;
+      carGroup.add(im); ch.inst.push(im); return im;
+    };
+    const set = { n: ids.length, mats, cols, pos, hi: mk('hi'), lo: mk('lo') };
+    ch.carSets.push(set); carSets.push(set);
+  }
+  for (const b of M.buildings) {
+    BLD.set(b.i, { b, ch }); BY_OSM.set(String(b.id), b.i);
+    const k = KNOWN_LOOK[b.id]; if (k) { b.facade = k.facade; b.end = k.end; b.src = k.src; }
+    const u = userCols.get(String(b.id)); if (u) applyColour(b.i, u.facade, u.end); else if (k) applyColour(b.i, b.facade, b.end);
+  }
+  return ch;
+}
+function disposeChunk(ch) {
+  scene.remove(ch.grp);
+  for (const g of ch.geos) g.dispose();
+  ch.cellMat.dispose(); ch.maskTex.dispose();
+  for (const m of ch.inst) { m.parent.remove(m); m.dispose(); }
+  for (const s of ch.treeSets) treeSets.splice(treeSets.indexOf(s), 1);
+  for (const s of ch.carSets) carSets.splice(carSets.indexOf(s), 1);
+  for (const b of ch.M.buildings) { BLD.delete(b.i); BY_OSM.delete(String(b.id)); }
+  if (current >= 0 && !BLD.has(current)) closeCard();
+  chunks.delete(ch.d.i); setHidden(ch.d.i, false);
+}
+function refreshAfterChange() { updateCarLod(true); renderer.shadowMap.needsUpdate = true; refreshList(); invalidate(); }
+
+async function loadChunk(d) {
+  if (chunks.has(d.i)) { const c = chunks.get(d.i); c.used = ++useTick; return c; }
+  if (pending.has(d.i)) return pending.get(d.i);
+  const p = (async () => {
+    refreshList(d.i); status();
+    let ch;
+    if (d.type === 'salt') {
+      const base = 'chunks/' + d.file;
+      const [M, raw, mask] = await Promise.all([fetch(base + '.json').then((r) => r.json()), loadBin(base + '.bin.wasm'), loadTex(base + '.jpg')]);
+      mask.colorSpace = THREE.NoColorSpace; mask.minFilter = THREE.LinearMipmapLinearFilter;
+      ch = buildChunk(d, M, raw, mask);
+    } else {
+      // city tile: compact data -> meshes in a worker
+      const { M, out } = await runGen('tile', d.file, { maskN: MOBILE ? 512 : 768 });
+      const mask = new THREE.DataTexture(out.mask, M.maskN, M.maskN, THREE.RGBAFormat);
+      mask.colorSpace = THREE.NoColorSpace; mask.minFilter = THREE.LinearMipmapLinearFilter; mask.magFilter = THREE.LinearFilter;
+      mask.generateMipmaps = true; mask.needsUpdate = true;
+      ch = buildChunk(d, M, (n) => out[n], mask);
+      ch.genMs = M.ms;
+    }
+    chunks.set(d.i, ch); setHidden(d.i, true);
+    return ch;
+  })();
+  pending.set(d.i, p);
+  try { return await p; }
+  catch (e) { $('bStat').textContent = `Не вдалося завантажити ${d.key}: ${e.message}`; throw e; }
+  finally { pending.delete(d.i); evict(); refreshAfterChange(); status(); }
+}
+let want = [];
+let photoHold = false;                             // while a photo is prepared: keep every loaded chunk, no auto loading
+let focusChunk = null;                             // chunk under the view centre (never evicted)
+function evict() {
+  if (photoHold) return;
+  while (chunks.size > MAXC) {
+    let lru = null;
+    for (const c of chunks.values()) if (!want.includes(c.d) && c.d !== focusChunk && (!lru || c.used < lru.used)) lru = c;
+    if (!lru) break;
+    disposeChunk(lru);
+  }
+}
+
+// which chunks should be in full detail: the one under the view centre, then its nearest neighbours
+const camDist = () => camera.position.distanceTo(controls.target);
+function bboxDist(d, x, y) { const [a, b, c, e] = d.bbox; return Math.hypot(Math.max(a - x, 0, x - c), Math.max(b - y, 0, y - e)); }
+function wantList() {
+  const t = controls.target, dist = camDist(), x = t.x, y = -t.z;
+  if (dist > 4600) return [];
+  const R = Math.min(MOBILE ? 600 : 1300, dist * (MOBILE ? 0.6 : 0.9));
+  const scored = CHUNKS.map((d) => [bboxDist(d, x, y), d]).sort((p, q2) => p[0] - q2[0]);
+  const out = []; const o = ownerAt(x, y);
+  if (o) out.push(DBY.get(o)); else if (scored[0][0] < 300) out.push(scored[0][1]);
+  for (const [dd, d] of scored) { if (out.length >= MAXC) break; if (!out.includes(d) && dd <= R) out.push(d); }
+  return out;
+}
+// focus = the place named in the header and outlined on the map: a Saltivka microdistrict or a city district
+let focus = null;
+function setFocus(d) {
+  if (d && d.type === 'city') d = d.raion;
+  if (d === focus) return;
+  focus = d;
+  focusLine.geometry.dispose();
+  focusLine.geometry = !d ? new THREE.BufferGeometry() : d.kind === 'raion' ? ringSegs(d.rings) : borderSegs((a, b) => (a === d.i) !== (b === d.i));
+  if (!d) { $('bTitle').textContent = 'Харків'; $('bKey').textContent = ''; $('bName').textContent = 'Усе місто з OpenStreetMap. Оберіть район, місцевість або мікрорайон Салтівки.'; }
+  else if (d.kind === 'raion') { $('bTitle').textContent = 'Харків'; $('bKey').textContent = d.key; $('bName').textContent = `${d.name} · ${Math.round(d.area / 100)} км² · ${d.places.length} місцевостей`; }
+  else { $('bTitle').textContent = 'Салтівка'; $('bKey').textContent = d.key; $('bName').textContent = `${d.name} · ${d.n} будівель · ${Math.round(d.area)} га`; }
+  document.title = d ? (d.kind === 'raion' ? `Харків · ${d.key}` : `Салтівка · ${d.key}`) : 'Харків 3D';
+  refreshList(); invalidate();
+}
+function status() {
+  const busy = [...pending.keys()].map((i) => DBY.get(i).key);
+  $('bStat').textContent = busy.length ? `будується ${busy.join(', ')}…` : chunks.size ? `детально: ${[...chunks.values()].map((c) => c.d.key).join(', ')}` : '';
+}
+function manage() {
+  if (anim || photoHold) return;                   // wait until a camera flight / photo ends
+  want = wantList();
+  const t = controls.target, o = ownerAt(t.x, -t.z);
+  focusChunk = o ? DBY.get(o) : null;
+  setFocus(camDist() > 16000 ? null : placeAt(t.x, -t.z) || focus);
+  for (const d of want) if (chunks.has(d.i)) chunks.get(d.i).used = ++useTick;
+  cullCtx();
+  if (pending.size >= Math.max(1, workers.length)) return;
+  const next = want.find((d) => !chunks.has(d.i) && !pending.has(d.i));
+  if (next) loadChunk(next).catch(() => {});
+}
+setInterval(manage, 450);
+
+// ---------------------------------------------------------------- picker UI: districts, neighbourhoods, Saltivka microdistricts + map labels
+const keyOrder = (d) => (/^\d/.test(d.key) ? 0 : d.key.startsWith('ПС') ? 1 : 2) * 1000 + (parseInt(d.key.replace(/\D/g, ''), 10) || 0);
+const SORTED = [...DIST].sort((a, b) => keyOrder(a) - keyOrder(b) || a.key.localeCompare(b.key, 'uk'));
+const listBtns = new Map(), labelBtns = new Map(), raionBtns = new Map();
+const closeSheetOnPhone = () => { if (innerWidth <= 640) toggleSheet(false); };
+$('dCount').textContent = `${RAIONS.length}`; $('sCount').textContent = `${DIST.length}`;
+for (const r of RAIONS) {
+  const b = document.createElement('button'); b.textContent = r.key; b.title = r.name;
+  b.addEventListener('click', () => { goDistrict(r); showPlaces(r); });
+  $('rlist').appendChild(b); raionBtns.set(r.i, b);
+}
+let shownRaion = null;
+function showPlaces(r) {
+  if (shownRaion === r) return;
+  shownRaion = r; const box = $('plist'); box.textContent = '';
+  $('plWrap').hidden = !r; if (!r) return;
+  $('plTitle').textContent = `Місцевості · ${r.key}`; $('plCount').textContent = `${r.places.length}`;
+  for (const p of r.places) {
+    const b = document.createElement('button'); b.textContent = p.name;
+    b.addEventListener('click', () => { goPlace(p); closeSheetOnPhone(); });
+    box.appendChild(b);
+  }
+}
+for (const d of SORTED) {
+  const b = document.createElement('button'); b.textContent = d.key; b.title = `${d.name} · ${d.n} будівель`;
+  b.addEventListener('click', () => { goDistrict(d); closeSheetOnPhone(); });
+  $('dlist').appendChild(b); listBtns.set(d.i, b);
+  const l = document.createElement('button'); l.textContent = d.key; l.title = d.name; l.hidden = true;
+  l.addEventListener('click', () => goDistrict(d));
+  $('labels').appendChild(l); labelBtns.set(d.i, l);
+}
+// map labels: districts when far, neighbourhoods in between, Saltivka microdistricts close to Saltivka
+const LABELS = [];
+for (const r of RAIONS) {
+  const l = document.createElement('button'); l.className = 'raion'; l.textContent = r.key; l.title = r.name; l.hidden = true;
+  l.addEventListener('click', () => { goDistrict(r); showPlaces(r); }); $('labels').appendChild(l);
+  LABELS.push({ el: l, x: r.centre[0], y: r.centre[1], kind: 'raion', r });
+}
+for (const p of PLACES) {
+  if (p.kind === 'landuse') continue;
+  const l = document.createElement('button'); l.className = 'place'; l.textContent = p.name; l.hidden = true;
+  l.addEventListener('click', () => goPlace(p)); $('labels').appendChild(l);
+  LABELS.push({ el: l, x: p.x, y: p.y, kind: 'place', p, pri: p.kind === 'suburb' ? 0 : 1 });
+}
+for (const d of DIST) LABELS.push({ el: labelBtns.get(d.i), x: d.centre[0], y: d.centre[1], kind: 'micro', d });
+function refreshList(busyI) {
+  for (const [i, b] of listBtns) {
+    b.classList.toggle('on', !!focus && focus.i === i);
+    b.classList.toggle('loaded', chunks.has(i));
+    b.classList.toggle('busy', pending.has(i) || busyI === i);
+  }
+  const fr = focus ? (focus.kind === 'raion' ? focus : raionAt(focus.centre[0], focus.centre[1])) : null;
+  for (const [i, b] of raionBtns) b.classList.toggle('on', !!fr && fr.i === i);
+  if (fr) showPlaces(fr);
+  for (const [i, l] of labelBtns) l.classList.toggle('on', !!focus && focus.i === i);
+}
+function toggleSheet(open) { $('districts').classList.toggle('open', open); $('dBtn').setAttribute('aria-expanded', String(open)); $('dBtn').classList.toggle('on', open); }
+$('dBtn').addEventListener('click', () => toggleSheet(!$('districts').classList.contains('open')));
+const lp = new THREE.Vector3();
+function placeLabels() {
+  const dist = camDist(), t = controls.target;
+  const nearSalt = Math.hypot(t.x - (UX0 + UX1) / 2, -t.z - (UY0 + UY1) / 2) < 6000;
+  const placed = [];                                 // screen boxes already used (labels never overlap)
+  const W = innerWidth, H = innerHeight;
+  for (const L of LABELS) {
+    let want = false;
+    if (!labelsOn) want = false;
+    else if (L.kind === 'raion') want = dist > 9000;
+    else if (L.kind === 'place') want = dist > 1100 && dist < 15000 && (L.pri === 0 || dist < 7000) && !(L.p && nearSalt && dist < 5000 && saltAt(L.p.x, L.p.y));
+    else want = dist > 850 && dist < 9000 && nearSalt && !(focus && focus.i === L.d.i && dist < 1500);
+    let vis = false, sx = 0, sy = 0;
+    if (want) {
+      lp.set(L.x, 10 + hAt(L.x, L.y), -L.y).project(camera);
+      if (lp.z < 1 && Math.abs(lp.x) < 1.05 && Math.abs(lp.y) < 1.05) {
+        sx = (lp.x + 1) / 2 * W; sy = (1 - lp.y) / 2 * H;
+        const w = L.kind === 'micro' ? 40 : (L.el.textContent.length * 7 + 18), h = 24;
+        if (!placed.some((b) => Math.abs(b[0] - sx) < (b[2] + w) / 2 && Math.abs(b[1] - sy) < (b[3] + h) / 2)) { vis = true; placed.push([sx, sy, w, h]); }
+      }
+    }
+    if (L.el.hidden === vis) L.el.hidden = !vis;
+    if (vis) L.el.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px) translate(-50%, -50%)`;
+  }
+}
+
+// fog = the sky's own colour a few degrees above the horizon where the camera looks (3 directions), so far ground melts into the sky.
+// three.js mixes fog after tone mapping when drawing straight to the screen (phones), before it when the frame goes
+// through the post-processing chain (desktop AO): measure the sky in the matching space.
+const probe = { rt: new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false }), cam: new THREE.PerspectiveCamera(8, 1, 1, 20000),
+  half: new Uint16Array(16), byte: new Uint8Array(4), dir: new THREE.Vector3() };
+let fogAz = 1e9;
+function fogFromSky() {
+  let viaComposer = false;
+  try { viaComposer = !!composer; } catch (e) { /* not created yet: measured again once it is */ }
+  const old = renderer.getRenderTarget(), vp = new THREE.Vector4(), sc = new THREE.Vector4(), st = renderer.getScissorTest(), pr = renderer.getPixelRatio();
+  renderer.getViewport(vp); renderer.getScissor(sc);
+  const acc = [0, 0, 0], N = 3;
+  camera.getWorldDirection(probe.dir); const a0 = Math.atan2(probe.dir.x, probe.dir.z); fogAz = a0;
+  try {
+    for (let k = 0; k < N; k++) {
+      const a = a0 + (k - 1) * 0.45;
+      probe.cam.position.set(0, 0, 0); probe.cam.lookAt(Math.sin(a), 0.055, Math.cos(a)); probe.cam.updateMatrixWorld();
+      if (viaComposer) {
+        renderer.setRenderTarget(probe.rt); renderer.render(envScene, probe.cam);
+        renderer.readRenderTargetPixels(probe.rt, 0, 0, 2, 2, probe.half);
+        for (let i = 0; i < 4; i++) for (let c = 0; c < 3; c++) acc[c] += THREE.DataUtils.fromHalfFloat(probe.half[i * 4 + c]) / (4 * N);
+      } else {
+        renderer.setRenderTarget(null);
+        renderer.setViewport(0, 0, 2 / pr, 2 / pr); renderer.setScissor(0, 0, 2 / pr, 2 / pr); renderer.setScissorTest(true);
+        renderer.render(envScene, probe.cam);
+        const g = renderer.getContext(); g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, probe.byte);
+        for (let c = 0; c < 3; c++) acc[c] += probe.byte[c] / 255 / N;
+      }
+    }
+    // three.js re-encodes the fog colour to sRGB when drawing to the screen: the on-screen sample is stored as sRGB, the linear one as is
+    if (acc.every((x) => Number.isFinite(x) && x > 0)) scene.fog.color.setRGB(acc[0], acc[1], acc[2], viaComposer ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace);
+  } catch (e) { /* keep the estimated fog colour */ }
+  finally {
+    renderer.setRenderTarget(old); renderer.setViewport(vp); renderer.setScissor(sc); renderer.setScissorTest(st);
+    try { invalidate(); } catch (e) { /* first call happens before the render loop exists */ }
+  }
+}
+
+// ---------------------------------------------------------------- sun / time of day (Kharkiv, early summer)
+@@SUN@@
+
+// ---------------------------------------------------------------- views
+let anim = null;
+function flyTo(pos, tgt, ms = 1300) {
+  const gy = hAt(tgt[0], -tgt[2]);                  // views are given above flat ground: lift them onto the terrain
+  anim = { t0: performance.now(), ms, p0: camera.position.clone(), t0v: controls.target.clone(), p1: new THREE.Vector3(pos[0], pos[1] + gy, pos[2]), t1: new THREE.Vector3(tgt[0], tgt[1] + gy, tgt[2]) };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) anim.ms = 1;
+}
+function districtView(d, top = false) {
+  const [a, b, c, e] = d.bbox, s = Math.max(c - a, e - b), [x, y] = d.centre;
+  const k = innerWidth < innerHeight ? 1.25 : 0.9;
+  if (top) return { pos: [x, s * 1.6 * k + 300, -y + 30], tgt: [x, 0, -y] };
+  return { pos: [x - s * 0.18 * k, s * 0.62 * k + 140, -y + s * 0.95 * k + 160], tgt: [x, 0, -y] };
+}
+function setViewBtn(name) { document.querySelectorAll('#views button[data-view]').forEach((x) => x.classList.toggle('on', x.dataset.view === name)); }
+function goDistrict(d, top = false) {
+  if (d.type === 'city') { goPoint(d.centre[0], d.centre[1], 1100); return; }
+  const vw = districtView(d, top); flyTo(vw.pos, vw.tgt); setViewBtn(top ? 'top' : 'district');
+  setFocus(d); if (d.kind === 'micro') loadChunk(d).catch(() => {});
+}
+// look at a point from about `dist` metres (neighbourhoods, clicks on the far city)
+function goPoint(x, y, dist = 900) {
+  const k = innerWidth < innerHeight ? 1.25 : 1;
+  flyTo([x - dist * 0.25 * k, dist * 0.62 * k + 60, -y + dist * 0.85 * k], [x, 0, -y]); setViewBtn('');
+  setFocus(placeAt(x, y));
+}
+function goPlace(p) { goPoint(p.x, p.y, p.kind === 'suburb' ? 1500 : 950); }
+function boundsView(x0, y0, x1, y1, k0 = 1) {
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, s = Math.max(x1 - x0, y1 - y0) * (innerWidth < innerHeight ? 1.35 : 0.95) * k0;
+  return { pos: [cx - s * 0.1, s * 0.62, -cy + s * 0.6], tgt: [cx, 0, -cy] };
+}
+const VIEWS = {
+  all: () => { setFocus(null); return boundsView(CX0, CY0, CX1, CY1, 0.9); },
+  salt: () => boundsView(UX0, UY0, UX1, UY1),
+  district: () => districtView(focus || DBY.get(13)),
+  top: () => districtView(focus || DBY.get(13), true),
+};
+document.querySelectorAll('#views button[data-view]').forEach((b) => b.addEventListener('click', () => {
+  setViewBtn(b.dataset.view);
+  const vw = VIEWS[b.dataset.view](); flyTo(vw.pos, vw.tgt);
+}));
+
+// ---------------------------------------------------------------- toggles
+let labelsOn = true;
+function bindToggle(id, fn) {
+  const el = $(id); const lab = el.closest('.tog');
+  el.addEventListener('change', () => { lab.classList.toggle('on', el.checked); fn(el.checked); renderer.shadowMap.needsUpdate = true; invalidate(); });
+}
+bindToggle('tTrees', (on) => { treeGroup.visible = on; ctxTreeGroup.visible = on; });
+bindToggle('tCars', (on) => { carGroup.visible = on; });
+bindToggle('tShadow', (on) => { sun.castShadow = on; });
+bindToggle('tBound', (on) => { borders.visible = on; raionLines.visible = on; focusLine.visible = on; labelsOn = on; });
+
+// ---------------------------------------------------------------- building card + colours
+function indexBy(bidArr, ckArr) {
+  const map = new Map();
+  for (let i = 0; i < bidArr.length; i++) {
+    if (!ckArr[i] || bidArr[i] < 0) continue;
+    let l = map.get(bidArr[i]); if (!l) map.set(bidArr[i], l = []); l.push(i);
+  }
+  return map;
+}
+// per-building recolouring (ck: 1 facade, 2 end walls, 3 parapet = facade*0.85, 4 plain balcony = facade*0.97)
+function applyColour(bi, fac, end) {
+  const e = BLD.get(bi); if (!e) return; const ch = e.ch;
+  const k = { 1: 1, 2: 1, 3: 0.85, 4: 0.97 };
+  const put = (colArr, ckArr, list) => {
+    for (const i of list || []) {
+      const ck = ckArr[i]; const c = ck === 2 ? end : fac; const f = k[ck];
+      colArr[i * 3] = Math.round(Math.min(1, c[0] * f) * 255); colArr[i * 3 + 1] = Math.round(Math.min(1, c[1] * f) * 255); colArr[i * 3 + 2] = Math.round(Math.min(1, c[2] * f) * 255);
+    }
+  };
+  put(ch.wallCol, ch.wallCk, ch.wallIdx.get(bi)); put(ch.restCol, ch.restCk, ch.restIdx.get(bi));
+  ch.wallGeo.attributes.color.needsUpdate = true; ch.restGeo.attributes.color.needsUpdate = true;
+  invalidate();
+}
+const KIND = { apartments: 'Житловий будинок', yes: 'Будівля', retail: 'Магазин', school: 'Школа', kindergarten: 'Дитячий садок',
+  garage: 'Гараж', garages: 'Гаражі', dormitory: 'Гуртожиток', service: 'Службова будівля', commercial: 'Комерційна',
+  house: 'Приватний будинок', detached: 'Приватний будинок', industrial: 'Промислова будівля', warehouse: 'Склад', church: 'Храм',
+  university: 'Університет', hospital: 'Лікарня', office: 'Офіс', public: 'Громадська будівля', shed: 'Сарай', kiosk: 'Кіоск' };
+const PRESETS = [[0.67, 0.67, 0.65], [0.73, 0.72, 0.69], [0.74, 0.69, 0.61], [0.80, 0.73, 0.62], [0.78, 0.61, 0.57],
+  [0.55, 0.69, 0.50], [0.70, 0.74, 0.76], [0.82, 0.78, 0.62], [0.62, 0.36, 0.28], [0.86, 0.86, 0.84]];
+const toHex = (c) => '#' + c.map((x) => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+const fromHex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+const addr = (b) => [b.street, b.num].filter(Boolean).join(', ') || 'Адреса не вказана в OSM';
+const userCols = new Map();   // osm id -> {facade, end}
+let current = -1, pendingCard = -1;
+
+PRESETS.forEach((c) => {
+  const bt = document.createElement('button'); bt.style.background = toHex(c); bt.title = toHex(c); bt.setAttribute('aria-label', 'Колір ' + toHex(c));
+  bt.addEventListener('click', () => { $('colF').value = toHex(c); $('colE').value = toHex(c.map((x) => x * 0.93)); preview(); });
+  $('presets').appendChild(bt);
+});
+function cols(b) { const u = userCols.get(String(b.id)); return u ? [u.facade, u.end || u.facade, true] : [b.facade, b.end, false]; }
+function showCard(bi) {
+  const e = BLD.get(bi); if (!e) return;
+  current = bi; selU.value = bi; const b = e.b;
+  $('card').hidden = false; $('search').hidden = innerWidth <= 640; toggleSheet(false);
+  $('cAddr').textContent = addr(b);
+  $('cDist').textContent = e.ch.d.name;
+  $('cKind').textContent = KIND[b.kind] || b.kind;
+  $('cLv').textContent = b.lv ? `${b.lv} (OSM)` : `≈${b.lvEst} (оцінка)`;
+  $('cH').textContent = `${b.h.toFixed(1)} м`;
+  $('cOsm').textContent = `way ${b.id}`;
+  const [f, en, user] = cols(b);
+  $('swF').style.background = toHex(f); $('swE').style.background = toHex(en);
+  $('colF').value = toHex(f); $('colE').value = toHex(en);
+  $('cSrc').innerHTML = user ? '<b>Колір виправлено вручну</b> на цій сторінці.' : `Джерело кольору: <b>${srcLabel(b.src)}</b>`;
+  $('saveNote').textContent = dbState.note; $('saveNote').classList.toggle('warn', !dbState.ok);
+  invalidate();
+}
+function srcLabel(s) {
+  if (s.startsWith('user')) return 'ваше уточнення (зелений)';
+  if (s.startsWith('Street View')) return s.replace('Street View', 'панорами Google').replace(':', ' —');
+  if (s.startsWith('estimated')) return 'оцінка за типовою палітрою Салтівки';
+  if (s.startsWith('фото')) return s;
+  return 'типовий колір для такого типу будівлі';
+}
+function preview() { if (current >= 0) applyColour(current, fromHex($('colF').value), fromHex($('colE').value)); }
+$('colF').addEventListener('input', preview); $('colE').addEventListener('input', preview);
+function closeCard() {
+  const e = BLD.get(current);
+  if (e) { const [f, en] = cols(e.b); applyColour(current, f, en); }
+  current = -1; selU.value = -1; $('card').hidden = true; $('search').hidden = false; invalidate();
+}
+$('closeCard').addEventListener('click', closeCard);
+
+// click: a building -> its card; empty ground or a far block -> that microdistrict (drags are ignored)
+const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); let down = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+  ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const pick = []; for (const c of chunks.values()) pick.push(...c.pick);
+  const h = ray.intersectObjects(pick, false)[0];
+  if (h) { const bi = h.object.geometry.attributes.bidx.getX(h.face.a); if (bi >= 0) { showCard(bi); return; } }
+  // the overview (Saltivka context + city blocks), else the ground plane
+  const far = [ctxMesh]; for (const b of cityCtx) if (b.meshes[0]) far.push(b.meshes[0]);
+  const hc = ray.intersectObjects(far, false).find((x) => !isHidden(x.object.geometry.attributes.own.getX(x.face.a)));
+  let px = null, py = null;
+  if (hc && (!h || hc.distance < h.distance)) { px = hc.point.x; py = -hc.point.z; }
+  else { const o = ray.ray.origin, dr = ray.ray.direction; for (let t = 0; t < 90000; t += 12) { const x = o.x + dr.x * t, z = o.z + dr.z * t; if (o.y + dr.y * t < hAt(x, -z)) { px = x; py = -z; break; } } }
+  if (px === null) return;
+  const s = saltAt(px, py);
+  if (s) { if (!focus || focus.i !== s || camDist() > 2500) goDistrict(DBY.get(s)); return; }
+  if (ownerAt(px, py) && camDist() > 1400) goPoint(px, py, Math.max(700, Math.min(1400, camDist() * 0.5)));
+});
+
+// address search over the whole city (Saltivka from index.json, the rest from city/addr.json, loaded on first use)
+const DKEY = new Map(DIST.map((d) => [d.i, d.key]));
+const ADDR = IDX.addr.filter((a) => a[2]).map(([bid, street, num, x, y, di]) => ({ bid, street, num, x, y, di, st: street.toLowerCase(), nm: num.toLowerCase(), dk: DKEY.get(di).toLowerCase(), sub: `Салтівка · ${DKEY.get(di)}` }));
+let cityAddr = null;
+function loadCityAddr() {
+  if (!cityAddr) cityAddr = fetch(`city/addr.json?v=${VER}`).then((r) => r.json()).then((A) => {
+    for (const [si, num, x, y, k, li] of A.a) {
+      const d = DBY.get(100 + k), street = A.streets[si], r = d.raion;
+      ADDR.push({ bid: d.bid0 + li, street, num: String(num), x, y, di: d.i, st: street.toLowerCase(), nm: String(num).toLowerCase(), dk: r ? r.key.toLowerCase() : '', sub: d.name });
+    }
+    runSearch();
+  }).catch(() => { cityAddr = null; });
+  return cityAddr;
+}
+$('q').addEventListener('focus', loadCityAddr, { once: true });
+// a word matches the street name, the start of the house number, or the district; exact house numbers come first
+const wordOk = (a, w) => a.st.includes(w) || a.nm.startsWith(w) || a.dk === w;
+function runSearch() {
+  const s = $('q').value.trim().toLowerCase(); const ul = $('results'); ul.textContent = '';
+  if (!s) return;
+  const words = s.split(/[\s,]+/).filter(Boolean);
+  const hits = ADDR.filter((x) => words.every((w) => wordOk(x, w)));
+  const exact = (x) => (words.some((w) => x.nm === w) ? 0 : 1);
+  const stStart = (x) => (words.some((w) => x.st.startsWith(w)) ? 0 : 1);
+  hits.sort((p, q2) => exact(p) - exact(q2) || stStart(p) - stStart(q2) || p.st.localeCompare(q2.st, 'uk') || p.nm.localeCompare(q2.nm, 'uk', { numeric: true }));
+  if (!hits.length && !cityAddr) { loadCityAddr(); return; }
+  hits.slice(0, 14).forEach((a) => {
+    const li = document.createElement('li'); const bt = document.createElement('button');
+    const name = document.createElement('span'); name.textContent = addr(a);
+    const sm = document.createElement('small'); sm.textContent = a.sub;
+    bt.append(name, sm);
+    bt.addEventListener('click', () => {
+      const d = 150, ch = DBY.get(a.di);
+      flyTo([a.x - d * 0.55, 110, -a.y + d], [a.x, 12, -a.y]); setViewBtn('');
+      ul.textContent = ''; $('q').value = '';
+      pendingCard = a.bid;
+      setFocus(ch.type === 'city' ? placeAt(a.x, a.y) : ch);
+      loadChunk(ch).then(() => { if (pendingCard === a.bid) { pendingCard = -1; showCard(a.bid); } }).catch(() => {});
+    });
+    li.appendChild(bt); ul.appendChild(li);
+  });
+}
+$('q').addEventListener('input', runSearch);
+
+// ---------------------------------------------------------------- shared colour corrections (db)
+const dbState = { ok: false, note: 'Збереження ще під’єднується…', db: null };
+$('save').addEventListener('click', async () => {
+  const e = BLD.get(current); if (!e) return;
+  const b = e.b; const facade = fromHex($('colF').value), end = fromHex($('colE').value);
+  if (!dbState.db) { $('saveNote').textContent = 'Збереження недоступне в цьому перегляді. Колір показано лише тут.'; $('saveNote').classList.add('warn'); return; }
+  $('save').disabled = true;
+  try {
+    await dbState.db.collection('colors').doc(String(b.id)).set({ facade, end, address: addr(b), district: e.ch.d.key, updatedAt: new Date().toISOString() });
+    $('saveNote').textContent = 'Збережено. Колір побачать усі, хто відкриє сторінку.'; $('saveNote').classList.remove('warn');
+  } catch (err) {
+    $('saveNote').textContent = err && err.code === 'invalid_argument' ? 'У вас немає прав змінювати кольори на цій сторінці.' : 'Не вдалося зберегти, спробуйте ще раз.';
+    $('saveNote').classList.add('warn');
+  } finally { $('save').disabled = false; }
+});
+$('reset').addEventListener('click', async () => {
+  const e = BLD.get(current); if (!e) return; const b = e.b;
+  if (dbState.db && userCols.has(String(b.id))) { try { await dbState.db.collection('colors').doc(String(b.id)).delete(); } catch (err) { /* keep local */ } }
+  userCols.delete(String(b.id)); applyColour(current, b.facade, b.end); showCard(current);
+});
+(async () => {
+  const db = await window.claude?.use?.('db').catch(() => null);
+  if (!db) { dbState.note = 'Збереження недоступне в цьому перегляді: зміни видно лише вам до перезавантаження.'; return; }
+  dbState.db = db; dbState.ok = true; dbState.note = 'Зміни бачать усі, хто відкриває цю сторінку.';
+  db.collection('colors').onSnapshot((snap) => {
+    const seen = new Set();
+    for (const d of snap.docs) {
+      const x = d.data(); if (!x || !Array.isArray(x.facade)) continue;
+      seen.add(d.id); userCols.set(d.id, { facade: x.facade, end: x.end || x.facade });
+      const bi = BY_OSM.get(d.id); if (bi !== undefined && bi !== current) applyColour(bi, x.facade, x.end || x.facade);
+    }
+    for (const id of [...userCols.keys()]) if (!seen.has(id)) {
+      userCols.delete(id); const bi = BY_OSM.get(id); const e = BLD.get(bi); if (e) applyColour(bi, e.b.facade, e.b.end);
+    }
+    if (current >= 0) showCard(current);
+  }, () => { dbState.ok = false; dbState.note = 'Збереження зараз недоступне.'; });
+})();
+
+// ---------------------------------------------------------------- photo of the current view
+// the view is re-rendered at a higher resolution (up to ~6 Mpx, 3 Mpx on phones), captioned and offered as a JPEG
+const downloadsP = (window.claude?.use?.('downloads') ?? Promise.resolve(null)).catch(() => null);
+function toast(text, ms = 2800) { const el = $('toast'); el.textContent = text; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, ms); }
+const TR = { а: 'a', б: 'b', в: 'v', г: 'h', ґ: 'g', д: 'd', е: 'e', є: 'ie', ж: 'zh', з: 'z', и: 'y', і: 'i', ї: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o',
+  п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ь: '', ю: 'iu', я: 'ia' };
+const slug = (s) => [...s.toLowerCase()].map((c) => (c in TR ? TR[c] : c)).join('').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function caption(g, w, h) {
+  const fs = Math.round(h * 0.024), pad = Math.round(fs * 0.9);
+  const line1 = !focus || camDist() > 16000 ? 'Харків' : focus.kind === 'raion' ? `Харків · ${focus.name}` : `Салтівка · ${focus.name}`;
+  const line2 = `${$('hourOut').textContent} · дані © OpenStreetMap`;
+  g.save(); g.textBaseline = 'alphabetic'; g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = fs * 0.5; g.fillStyle = '#fff';
+  g.font = `700 ${fs}px Unbounded, "Arial Black", sans-serif`; g.fillText(line1, pad, h - pad - fs * 1.15);
+  g.font = `500 ${Math.round(fs * 0.62)}px Onest, "Segoe UI", sans-serif`; g.fillText(line2, pad, h - pad);
+  g.restore();
+}
+async function makePhoto(shadowR) {
+  const W = innerWidth, H = innerHeight, pr0 = renderer.getPixelRatio(), maxT = renderer.capabilities.maxTextureSize;
+  let s = Math.sqrt((MOBILE ? 3.0e6 : 6.0e6) / (W * H));
+  s = Math.max(pr0, Math.min(s, maxT / W, maxT / H, 4));
+  try {
+    renderer.setPixelRatio(s); renderer.setSize(W, H, false);
+    if (composer) { composer.setPixelRatio(s); composer.setSize(W, H); }
+    updateCarLod(true); fitShadow(shadowR); placeLabels(); fogFromSky();
+    draw();
+    const cv = document.createElement('canvas'); cv.width = renderer.domElement.width; cv.height = renderer.domElement.height;
+    const g = cv.getContext('2d'); g.drawImage(renderer.domElement, 0, 0);
+    caption(g, cv.width, cv.height);
+    return await new Promise((res, rej) => cv.toBlob((b) => (b ? res(b) : rej(new Error('toBlob'))), 'image/jpeg', 0.92));
+  } finally {
+    renderer.setPixelRatio(pr0); renderer.setSize(W, H, false);
+    if (composer) { composer.setPixelRatio(pr0); composer.setSize(W, H); }
+    invalidate();
+  }
+}
+// every chunk (microdistrict or city tile) inside the frame, nearest first (16 at most, phones 5: memory)
+function framedDistricts() {
+  camera.updateMatrixWorld();
+  const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const box = new THREE.Box3(), c = new THREE.Vector3(), maxD = MOBILE ? 2500 : 8000;
+  const out = [];
+  for (const d of CHUNKS) {
+    const [x0, y0, x1, y1] = d.bbox;
+    const gc = hAt((x0 + x1) / 2, (y0 + y1) / 2); box.min.set(x0, gc - 40, -y1); box.max.set(x1, gc + 110, -y0);
+    if (!fr.intersectsBox(box)) continue;
+    const dd = box.clampPoint(camera.position, c).distanceTo(camera.position);
+    if (dd < maxD) out.push([dd, d]);
+  }
+  return out.sort((a, b) => a[0] - b[0]).slice(0, MOBILE ? 5 : 16).map((x) => x[1]);
+}
+// photo detail: full tree / car models this far from the camera, simplified ones (never hidden) beyond; wide sharp shadows
+const PHOTO = MOBILE ? { tree: 500, car: 400, shadow: 4096, rMax: 1000 } : { tree: 1600, car: 1500, shadow: 8192, rMax: 2600 };
+let photoCancel = false;
+function prog(title, k, n, sub = '') {
+  $('prog').hidden = false; $('progT').textContent = title;
+  $('progB').style.width = `${n ? Math.round(k / n * 100) : 100}%`; $('progS').textContent = sub;
+}
+const later = (ms) => new Promise((r) => setTimeout(r, ms));
+$('progX').addEventListener('click', () => { photoCancel = true; $('progT').textContent = 'Скасування…'; });
+function setShadowSize(n) {
+  if (sun.shadow.mapSize.x === n) return;
+  sun.shadow.mapSize.setScalar(n);
+  if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+}
+async function photoRender() {
+  photoHold = true; photoCancel = false; anim = null; controls.enabled = false;
+  const lod0 = { tree: TREE_LOD, car: CAR_LOD }, sh0 = sun.shadow.mapSize.x;
+  try {
+    // 1. every microdistrict in the frame in full detail
+    const need = framedDistricts(), todo = need.filter((d) => !chunks.has(d.i));
+    let done = 0;
+    const tell = () => prog('Будуються квартали у кадрі', done, todo.length,
+      `${done} з ${todo.length} · у кадрі: ${need.map((d) => d.key).join(', ') || '—'}`);
+    tell();
+    const par = Math.max(2, workers.length);
+    for (let k = 0; k < todo.length; k += par) {
+      if (photoCancel) throw new Error('cancel');
+      await Promise.all(todo.slice(k, k + par).map((d) => loadChunk(d).catch(() => null).then(() => { done++; tell(); })));
+    }
+    if (photoCancel) throw new Error('cancel');
+    // 2. near models for trees and cars much further out, sharp shadows over the whole view, then one big frame
+    prog('Рендер кадру…', 1, 1, 'дерева й авто в повній деталізації, тіні по всьому кадру');
+    await later(40);
+    TREE_LOD = PHOTO.tree; CAR_LOD = { hi: PHOTO.car, lo: 1e9 };
+    setShadowSize(Math.min(PHOTO.shadow, renderer.capabilities.maxTextureSize));
+    const R = THREE.MathUtils.clamp(camDist() * 1.25, 200, PHOTO.rMax);
+    return await makePhoto(R);
+  } finally {
+    TREE_LOD = lod0.tree; CAR_LOD = lod0.car; setShadowSize(sh0);
+    photoHold = false; controls.enabled = true;
+    want = wantList(); evict(); refreshAfterChange(); fitShadow(); status();
+    $('prog').hidden = true;
+  }
+}
+$('shot').addEventListener('click', async () => {
+  const btn = $('shot'); if (btn.disabled) return; btn.disabled = true;
+  try {
+    const blob = await photoRender();
+    const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
+    const d = new Date(), p2 = (n) => String(n).padStart(2, '0');
+    const name = `kharkiv-${focus && camDist() < 16000 ? slug(focus.key) : 'misto'}-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}.jpg`;
+    const dl = await downloadsP;
+    if (dl) {
+      try { await dl.save({ filename: name, data: blob }); toast('Фото збережено'); }
+      catch (e) { toast(e && e.code === 'declined' ? 'Збереження скасовано' : e && e.code === 'rate_limited' ? 'Зачекайте мить і спробуйте ще раз' : 'Не вдалося зберегти фото'); }
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      toast('Фото збережено');
+    }
+  } catch (e) { toast(e && e.message === 'cancel' ? 'Фото скасовано' : 'Не вдалося зробити фото'); }
+  finally { btn.disabled = false; }
+});
+
+// ---------------------------------------------------------------- loop
+const useAO = !matchMedia('(pointer: coarse)').matches;
+let composer = null, gtao = null;
+if (useAO) {
+  const pr = renderer.getPixelRatio();
+  composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 }));
+  composer.addPass(new RenderPass(scene, camera));
+  gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+  gtao.output = GTAOPass.OUTPUT.Default;
+  gtao.blendIntensity = 0.85;
+  gtao.updateGtaoMaterial({ radius: 3.0, distanceExponent: 1.5, thickness: 2.0, scale: 1.0, samples: 12, distanceFallOff: 1.0 });
+  gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+  composer.addPass(gtao);
+  composer.addPass(new OutputPass());
+}
+// near plane and fog follow the viewing distance (precision for the ground layers, haze over the whole city when far)
+function fitRange() {
+  const d = camDist();
+  const near = THREE.MathUtils.clamp(d * 0.008, 1.5, 40);
+  if (Math.abs(near - camera.near) / camera.near > 0.1) { camera.near = near; camera.updateProjectionMatrix(); }
+  scene.fog.near = Math.max(1400, d * 1.4); scene.fog.far = Math.max(6000, d * 4.5 + 3000);
+}
+fogFromSky();
+function draw() { sky.position.copy(camera.position); fitRange(); if (composer) composer.render(); else renderer.render(scene, camera); }
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.fov = innerWidth < innerHeight ? 58 : 42; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); dirty = 3;
+  if (composer) composer.setSize(innerWidth, innerHeight);
+});
+window.__v = { hAt, DEM, camera, controls, flyTo, renderer, scene, draw: () => { updateCarLod(true); placeLabels(); fogFromSky(); draw(); }, get composer() { return composer; }, fitShadow,
+  invalidate, chunks, loadChunk, goDistrict, goPoint, goPlace, DBY, CHUNKS, RAIONS, PLACES, manage, ownerAt, placeAt, makePhoto, photoRender, framedDistricts, cityCtx, isHidden, workers, get focus() { return focus; },
+  endAnim: () => { if (anim) { camera.position.copy(anim.p1); controls.target.copy(anim.t1); anim = null; controls.update(); } } };
+const needle = $('needle');
+for (const ev of ['pointerdown', 'pointermove', 'wheel', 'input', 'change', 'click', 'keydown', 'touchmove'])
+  addEventListener(ev, invalidate, { passive: true });
+controls.addEventListener('change', invalidate);
+// panning over the relief: the view centre (and the camera with it) rides up and down with the ground; never below the surface
+let followGy = null;
+function followGround() {
+  const t = controls.target, cp = camera.position, gy = hAt(t.x, -t.z);
+  if (!anim && followGy !== null && Math.abs(gy - followGy) > 1e-3) { const d = gy - followGy; t.y += d; cp.y += d; dirty = Math.max(dirty, 2); }
+  followGy = gy;
+  const floor = hAt(cp.x, -cp.z) + 4;
+  if (cp.y < floor) { cp.y = floor; dirty = Math.max(dirty, 2); }
+}
+function frame(t) {
+  if (anim) {
+    let k = Math.min(1, (t - anim.t0) / anim.ms); k = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    camera.position.lerpVectors(anim.p0, anim.p1, k); controls.target.lerpVectors(anim.t0v, anim.t1, k);
+    if (k >= 1) anim = null;
+  }
+  if (controls.update() || anim) dirty = Math.max(dirty, 2);
+  followGround();
+  if (!dirty) { requestAnimationFrame(frame); return; }
+  dirty--;
+  if (updateCarLod(false)) renderer.shadowMap.needsUpdate = true;
+  const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+  needle.setAttribute('transform', `rotate(${THREE.MathUtils.radToDeg(az)} 15 15)`);
+  if (shadowDirty) { shadowDirty = false; fitShadow(); }
+  placeLabels();
+  camera.getWorldDirection(probe.dir);
+  { const da = Math.atan2(probe.dir.x, probe.dir.z) - fogAz; if (Math.abs(Math.atan2(Math.sin(da), Math.cos(da))) > 0.12) fogFromSky(); }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+// start over 603 (the most detailed one), then neighbours stream in
+const start = DBY.get(13);
+{ const vw = { pos: [-80, 420, 780], tgt: [-20, 0, -60] }, gy = hAt(-20, 60); camera.position.set(vw.pos[0], vw.pos[1] + gy, vw.pos[2]); controls.target.set(vw.tgt[0], gy, vw.tgt[2]); }
+setFocus(start);
+msg('завантаження мікрорайону 603 і огляду міста…');
+await Promise.all([loadChunk(start), loadCityCtx().catch((e) => { console.error(e); $('bStat').textContent = 'Огляд міста не завантажився'; })]);
+renderer.shadowMap.needsUpdate = true;
+$('loading').hidden = true;
+manage();
+requestAnimationFrame(frame);
+</script>

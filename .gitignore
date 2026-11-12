@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+# generated (about 1.2 GB) - rebuild with scripts/ua/build_all.sh
+data_ua/
+web/
+web_ua/*/
