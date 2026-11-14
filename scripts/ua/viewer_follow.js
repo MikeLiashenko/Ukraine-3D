@@ -221,10 +221,10 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
   function goalNow(now) {
     let lat, lon, hdg, alt, pitch = 0;
     if (mode === 'push' && P) {
-      const dt = Math.min(2.5, (performance.now() - pushAt) / 1000), v = (P.kmh || 0) / 3600 * (P.moving === false ? 0 : 1);
+      const dt = Math.min(2.5, (performance.now() - pushAt) / 1000), v = ((P.v ?? P.kmh) || 0) / 3600 * (P.moving === false ? 0 : 1);
       [lat, lon] = v > 0 && P.hdg != null ? moveKm(P.lat, P.lon, P.hdg, v * dt) : [P.lat, P.lon];
       hdg = P.hdg ?? hdgCur / D2R; const a = altOf(T, { p: P.progress, distKm: P.distKm });
-      alt = a.alt; pitch = a.pitch; M = { lat, lon, hdg, uncertKm: P.uncertKm || 0, ahead: P.ahead || null, quiet: P.quiet || 0 };
+      alt = a.alt; pitch = a.pitch; M = { lat, lon, hdg, uncertKm: P.uncertKm || 0, ahead: P.ahead || null, quiet: P.quiet || 0, orbit: !!P.orbit };
     } else {
       M = mode === 'live' ? motion(T, now) : { lat: T.lat, lon: T.lon, hdg: T.heading || 0, quiet: 0 };
       ({ lat, lon, hdg } = M); const a = altOf(T, M); alt = a.alt; pitch = a.pitch;
