@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Україна 3D</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0d1117; color: #c9d1d9; font: 15px/1.5 system-ui, sans-serif; }
+  main { max-width: 420px; padding: 24px 16px; text-align: center; }
+  a { color: #58a6ff; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #f85149; display: inline-block; margin-right: 8px; animation: p 1s infinite alternate; }
+  @keyframes p { to { opacity: 0.25; } }
+</style>
+</head>
+<body>
+<main><p id="m"><span class="dot"></span>Шукаю область…</p></main>
+<script>
+// ?lat=&lon= (or ?id= of a WarAlarm target) -> the 3D viewer of the oblast that holds the point; every parameter is passed on
+const DB = 'https://waralarm-c8c1f-default-rtdb.europe-west1.firebasedatabase.app';
+const $m = document.getElementById('m');
+const say = (t) => { $m.textContent = t; };
+function inRing(r, lon, lat) {
+  let ins = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [xi, yi] = r[i], [xj, yj] = r[j];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) ins = !ins;
+  }
+  return ins;
+}
+const inObl = (o, lon, lat) => o.rings.reduce((a, r) => a !== inRing(r, lon, lat), false);
+// km from the point to the oblast outline (a target just outside the border: the nearest oblast)
+function edgeKm(o, lon, lat) {
+  const kx = 111.32 * Math.cos(lat * Math.PI / 180), ky = 110.57; let best = 1e9;
+  for (const r of o.rings) for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const ax = (r[j][0] - lon) * kx, ay = (r[j][1] - lat) * ky, bx = (r[i][0] - lon) * kx, by = (r[i][1] - lat) * ky;
+    const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0;
+    best = Math.min(best, Math.hypot(ax + dx * t, ay + dy * t));
+  }
+  return best;
+}
+const urlOf = (o) => (location.hostname.endsWith('github.io') && o.url ? o.url : `../${o.slug}/`);
+(async () => {
+  const q = new URLSearchParams(location.search);
+  let lat = parseFloat(q.get('lat')), lon = parseFloat(q.get('lon'));
+  const [obl, threats] = await Promise.all([fetch('oblasts.json').then((r) => r.json()),
+    !(isFinite(lat) && isFinite(lon)) && q.get('id') ? fetch(`${DB}/state/threats.json`).then((r) => r.json()).catch(() => null) : null]);
+  if (!(isFinite(lat) && isFinite(lon)) && threats) {
+    const t = (threats || []).find((x) => x && x.id === q.get('id'));
+    if (t) { lat = t.lat; lon = t.lon; q.set('lat', lat); q.set('lon', lon); }
+  }
+  if (!(isFinite(lat) && isFinite(lon))) { say('Ціль не знайдено: вона вже зникла з радарів.'); return; }
+  let o = obl.find((x) => inObl(x, lon, lat));
+  if (!o) o = obl.map((x) => [edgeKm(x, lon, lat), x]).sort((a, b) => a[0] - b[0])[0][1];   // over Russia / the sea: the nearest oblast
+  say(`${o.name}…`);
+  location.replace(`${urlOf(o)}?${q.toString()}${location.hash}`);
+})().catch((e) => { say('Не вдалося відкрити карту.'); console.error(e); });
+</script>
+</body>
+</html>

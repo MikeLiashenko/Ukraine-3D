@@ -14,6 +14,15 @@ forests, fields, rivers, roads and every mapped building, in the browser (three.
 
 Data © OpenStreetMap contributors (ODbL). Relief: AWS Terrain Tiles (terrarium; SRTM, ETOPO1 and others).
 
+## Following a target (WarAlarm)
+
+`go/?lat=<lat>&lon=<lon>` opens the oblast that holds the point (`go/oblasts.json`: simplified outlines + published URLs).
+With `&id=<WarAlarm target id>` the oblast page follows a live target from the WarAlarm state: a 3D model of the weapon
+(Shahed, cruise missile, ballistic, KAB, FPV, aircraft) flies over the real buildings with its track, the way ahead
+and the ring of where it may be; the camera rides along; at an oblast border the page hands over to the next oblast.
+Inside the WarAlarm app the app pushes the exact position itself: `window.WA.push({lat, lon, hdg, kmh, cat, label, ...})`
+(or `postMessage({wa: 'target', ...})` from a parent frame). Code: `scripts/ua/viewer_follow.js`, router `scripts/ua/build_go.py`.
+
 ## Layout
 
 ```
@@ -25,7 +34,8 @@ scripts/ua/            the Ukraine pipeline
   ua_region.py <slug>  one oblast -> web_ua/<slug>/: region.json, tiles + overview + addresses + 50 m relief in 12 km packs,
                        400 m relief (dem.bin.wasm), 100 m land cover (lc.png)
   ua_bundle.py <slug>  merge 2x2 packs into one file (fewer files to host)
-  build_region_viewer.py <out_dir> [hub_url]   the oblast page from viewer_region_tpl.html
+  build_region_viewer.py <out_dir> [hub_url]   the oblast page from viewer_region_tpl.html (+ viewer_follow.js)
+  build_go.py          the go/ router: a point -> its oblast page
   ua_hub.py, build_hub.py                       the all-Ukraine map from hub_tpl.html
   ua_pubplan.py        split each oblast's files into upload batches
   build_all.sh         everything above in order

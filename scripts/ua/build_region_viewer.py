@@ -15,6 +15,7 @@ blocks = dict(HEAD=head, SRGB=L(342, 385), SURF=L(308, 329).rstrip()[:-1], GND=L
               RESTFRAG=L(621, 631), CAR=L(744, 753), SUN=L(811, 832))
 for k, v in blocks.items():
     t = t.replace('@@%s@@' % k, v)
+t = t.replace('@@FOLLOW@@', open(os.path.join(HERE, 'viewer_follow.js'), encoding='utf-8').read().rstrip())   # WarAlarm: follow a target (?lat=&lon=&id=)
 t = t.replace('@@VER@@', time.strftime('%y%m%d%H%M')).replace('@@HUB@@', hub)
 assert '@@' not in t, t[t.index('@@') - 200:t.index('@@') + 100]
 a = "  scene.fog.color.setRGB(0.78 - warm * 0.05, 0.82 - warm * 0.12, 0.86 - warm * 0.22);"

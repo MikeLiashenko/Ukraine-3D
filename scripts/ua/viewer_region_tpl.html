@@ -827,14 +827,18 @@ window.__v = { hAt, DEM, FINE, camera, controls, flyTo, renderer, scene, draw: (
   endAnim: () => { if (anim) { camera.position.copy(anim.p1); controls.target.copy(anim.t1); anim = null; controls.update(); } } };
 @@KEEP 1471-1503@@
 
-// start: the oblast's biggest city (or a place named in the address: #Назва)
+@@FOLLOW@@
+
+// start: the oblast's biggest city (or a place named in the address: #Назва; or a target to follow: ?lat=&lon=)
 let start = BIG;
 try { const h = decodeURIComponent(location.hash.slice(1)).trim().toLowerCase(); if (h) start = SETS.find((s) => s.name.toLowerCase() === h) || start; } catch (e) { /* no hash */ }
-{ const vw = setView(start), gy = hAt(vw.tgt[0], -vw.tgt[2]); camera.position.set(vw.pos[0], vw.pos[1] + gy, vw.pos[2]); controls.target.set(vw.tgt[0], gy, vw.tgt[2]); }
+if (WAF.on) { const x = WAF.x, y = WAF.y, gy = hAt(x, y); camera.position.set(x - 400, gy + 500, -y + 600); controls.target.set(x, gy, -y); start = placeAt(x, y) || null; }
+else { const vw = setView(start), gy = hAt(vw.tgt[0], -vw.tgt[2]); camera.position.set(vw.pos[0], vw.pos[1] + gy, vw.pos[2]); controls.target.set(vw.tgt[0], gy, vw.tgt[2]); }
 setFocus(start);
-msg(`завантаження: ${start.name}…`);
-{ const p = packAt(start.x, start.y); if (p) await packReady(p).catch((e) => console.error(e)); }
-{ const vw = setView(start), gy = hAt(vw.tgt[0], -vw.tgt[2]); camera.position.set(vw.pos[0], vw.pos[1] + gy, vw.pos[2]); controls.target.set(vw.tgt[0], gy, vw.tgt[2]); }
+msg(`завантаження: ${start ? start.name : RNAME}…`);
+{ const p = WAF.on ? packAt(WAF.x, WAF.y) : packAt(start.x, start.y); if (p) await packReady(p).catch((e) => console.error(e)); }
+if (WAF.on) WAF.start();
+else { const vw = setView(start), gy = hAt(vw.tgt[0], -vw.tgt[2]); camera.position.set(vw.pos[0], vw.pos[1] + gy, vw.pos[2]); controls.target.set(vw.tgt[0], gy, vw.tgt[2]); }
 renderer.shadowMap.needsUpdate = true;
 $('loading').hidden = true;
 manage();
