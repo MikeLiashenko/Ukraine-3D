@@ -163,8 +163,9 @@ const WAF = (() => {
 
   // ---- UI: panel + label next to the model
   const css = document.createElement('style');
-  css.textContent = `body.wa #districts { display: none !important; }
-#waPanel { position: fixed; z-index: 30; left: max(16px, env(safe-area-inset-left, 0px)); top: 120px; width: min(360px, calc(100vw - 32px)); padding: 10px 12px; display: grid; gap: 4px; box-sizing: border-box; }
+  css.textContent = `/* follow mode shows only the target: none of the site's own panels and place labels */
+body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #compass, body.wa #labels, body.wa #card, body.wa #prog { display: none !important; }
+#waPanel { position: fixed; z-index: 30; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(14px + env(safe-area-inset-top, 0px)); width: min(360px, calc(100vw - 32px)); padding: 10px 12px; display: grid; gap: 4px; box-sizing: border-box; }
 #waPanel .wt { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 #waPanel .wt b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #waPanel .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--wa, #ff5a36); box-shadow: 0 0 0 0 var(--wa, #ff5a36); animation: waP 1.4s infinite; flex: none; }
@@ -183,8 +184,6 @@ const WAF = (() => {
   panel.innerHTML = `<div class="wt"><span class="dot"></span><b id="waName">Ціль</b><small id="waStage"></small></div><div id="waInfo"></div><small id="waAge"></small>
 <div class="wb"><button id="waCam" class="on">🎥 Камера за ціллю</button><button id="waSize">Реальний розмір</button><button id="waTop">Згори</button></div>`;
   document.body.appendChild(panel); document.body.classList.add('wa');
-  const placePanel = () => { const b = $('brand').getBoundingClientRect(); panel.style.top = `${Math.round(b.bottom + (innerWidth > 640 ? 10 : 6))}px`; };
-  placePanel(); addEventListener('resize', placePanel); setInterval(placePanel, 2000);
   const lab = document.createElement('div'); lab.id = 'waLab'; document.body.appendChild(lab);
   let camFollow = true, realSize = false, gone = false;
   const setCam = (v) => { camFollow = v; $('waCam').classList.toggle('on', v); $('waCam').textContent = v ? '🎥 Камера за ціллю' : '🎥 До цілі'; };
@@ -212,7 +211,7 @@ const WAF = (() => {
     try {
       const list = await fetch(`${DB}/state/threats.json`, { cache: 'no-store' }).then((r) => r.json());
       const t = (list || []).find((x) => x && x.id === ID);
-      if (!t) { if (mode === 'live') setGone('Ціль зникла з радарів: збита, долетіла або втрачена'); return; }
+      if (!t) { setGone(mode === 'live' ? 'Ціль зникла з радарів: збита, долетіла або втрачена' : 'Ціль уже зникла з радарів'); return; }
       mode = 'live'; T = t; if (!trailSeeded && t.trail) seedTrail(t.trail);
     } catch (e) { console.warn('WarAlarm state', e); }
   }
@@ -347,7 +346,7 @@ const WAF = (() => {
       const spd = T.kmh > 0 ? `${Math.round(T.kmh)} км/год` : '';
       $('waInfo').textContent = [T.place, M && M.orbit ? 'кружляє' : `курс ${dir}`, spd, fmtAlt(altNow)].filter(Boolean).join(' · ');
       const q = M ? M.quiet || 0 : 0;
-      $('waAge').textContent = mode === 'static' ? 'точка з посилання' : gone ? 'останнє відоме місце' : q < 1 ? 'щойно з каналів' : `останній звіт ${Math.round(q)} хв тому${(M && M.uncertKm) > 0.3 ? ` · може бути в межах ${Math.round(M.uncertKm)} км` : ''}`;
+      $('waAge').textContent = gone ? 'останнє відоме місце' : mode === 'static' ? 'точка з посилання' : q < 1 ? 'щойно з каналів' : `останній звіт ${Math.round(q)} хв тому${(M && M.uncertKm) > 0.3 ? ` · може бути в межах ${Math.round(M.uncertKm)} км` : ''}`;
       lab.innerHTML = ''; const b = document.createElement('b'); b.textContent = name; lab.append(b, document.createElement('br'), fmtAlt(altNow));
       handover();
     }
