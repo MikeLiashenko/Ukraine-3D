@@ -10,6 +10,8 @@ forests, fields, rivers, roads and every mapped building, in the browser (three.
   there are simplified buildings, forest blobs, roads and water over 50 m relief; the whole oblast is visible as relief and land cover.
   Click a building for its address, type, floors and height; search settlements and addresses; time of day, shadows, photo mode.
 
+**Live site:** https://mikeliashenko.github.io/Ukraine-3D/hub/
+
 Data © OpenStreetMap contributors (ODbL). Relief: AWS Terrain Tiles (terrarium; SRTM, ETOPO1 and others).
 
 ## Layout
@@ -56,3 +58,8 @@ folders are not in the repository.
 Every oblast is a static folder; any static host works. The oblast page links back to the hub with the URL given as the
 second argument of `build_region_viewer.py` (default `../hub/`), and the hub links to oblasts through `data_ua/urls.json`
 (`{"<slug>": "<url>"}`, default `../<slug>/`).
+
+The live site is on GitHub Pages. A Pages site holds at most 1 GB and the built site is about 1.4 GB, so it is split in two:
+the `gh-pages` branch of this repository has the hub and half of the oblasts, and the `gh-pages` branch of
+[Ukraine-3D-2](https://github.com/MikeLiashenko/Ukraine-3D-2) has the rest. Both are served from `mikeliashenko.github.io`,
+so the hub's links (from `data_ua/urls.json`) and the oblast pages' hub link work across the two.

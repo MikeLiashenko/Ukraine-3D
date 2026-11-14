@@ -195,6 +195,7 @@ function placeLabels() {
 // ---------------------------------------------------------------- panel: oblast list, selected oblast / settlement
 // published: each oblast is its own artifact (URLS); on a local server the oblast pages sit next to this one
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const FRAMED = window.self !== window.top;   // inside an embedding page (e.g. a Claude artifact): oblasts open in a new tab; a normal site: same tab
 const baseUrl = (o) => URLS[o.slug] || (LOCAL ? `../${o.slug}/` : null);
 const openUrl = (o, place) => baseUrl(o) ? baseUrl(o) + (place ? '#' + encodeURIComponent(place) : '') : null;
 const oBtns = [];
@@ -204,7 +205,7 @@ let sel = -1;
 function kv(rows) { const d = document.createElement('div'); d.className = 'kv'; for (const [k, v] of rows) { const a = document.createElement('span'); a.textContent = k; const b = document.createElement('span'); b.textContent = v; d.append(a, b); } return d; }
 function openLink(o, place, label) {
   const a = document.createElement('a'); a.className = 'open'; const u = openUrl(o, place);
-  if (u) { a.href = u; if (!LOCAL) { a.target = '_blank'; a.rel = 'noopener'; } a.textContent = label; } else { a.classList.add('off'); a.textContent = 'Ця область ще готується'; }
+  if (u) { a.href = u; if (FRAMED) { a.target = '_blank'; a.rel = 'noopener'; } a.textContent = label; } else { a.classList.add('off'); a.textContent = 'Ця область ще готується'; }
   return a;
 }
 function pickObl(i, fly) {
@@ -218,7 +219,7 @@ function pickObl(i, fly) {
   const big = o.sets.filter((s) => s.k <= 1).slice(0, 12);
   if (big.length) {
     const h = document.createElement('h3'); h.textContent = 'Міста'; const box = document.createElement('div'); box.id = 'clist';
-    for (const s of big) { const a = document.createElement('a'); const u = openUrl(o, s.name); if (u) { a.href = u; if (!LOCAL) { a.target = '_blank'; a.rel = 'noopener'; } } a.innerHTML = '<span></span><small></small>'; a.firstChild.textContent = s.name; a.lastChild.textContent = s.pop ? s.pop.toLocaleString('uk') : KIND_UK[s.k]; box.appendChild(a); }
+    for (const s of big) { const a = document.createElement('a'); const u = openUrl(o, s.name); if (u) { a.href = u; if (FRAMED) { a.target = '_blank'; a.rel = 'noopener'; } } a.innerHTML = '<span></span><small></small>'; a.firstChild.textContent = s.name; a.lastChild.textContent = s.pop ? s.pop.toLocaleString('uk') : KIND_UK[s.k]; box.appendChild(a); }
     body.append(h, box);
   }
   $('panel').classList.remove('min');

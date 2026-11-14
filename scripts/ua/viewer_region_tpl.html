@@ -74,7 +74,7 @@ const [REG, COMMON, commonRaw, demRaw, lcImg] = await Promise.all([fetch(`region
 const IDX = { common: COMMON };
 const CM = view(IDX.common, commonRaw);
 const RNAME = REG.name;
-if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) $('home').removeAttribute('target');   // local server: same tab
+if (window.self === window.top) $('home').removeAttribute('target');   // a normal site: same tab (embedded, e.g. a Claude artifact: new tab)
 $('bTitle').textContent = RNAME; $('lTitle').textContent = RNAME; document.title = `${RNAME} · 3D`;
 const TS = REG.T, PK = REG.PK, [GX0, GY0, GNX, GNY] = REG.grid, [BX0, BY0, BX1, BY1] = REG.bounds;
 const NPX = Math.ceil(GNX / PK), NPY = Math.ceil(GNY / PK), PS = PK * TS;
