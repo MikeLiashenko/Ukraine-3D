@@ -14,6 +14,7 @@ step="${1:-all}"
 
 if [ "$step" = all ]; then
   python ua_extract.py "$ROOT/data_ua/ukraine-latest.osm.pbf" "$ROOT/data_ua/bins"   # one pass over the PBF -> spatial bins (~30 min)
+  python ua_coast.py "$ROOT/data_ua/ukraine-latest.osm.pbf"                         # the coastline (natural=coastline) -> the sea
   python fetch_dem_ua.py "$ROOT/data_ua/dem11"                                       # relief tiles (AWS Terrain Tiles, terrarium z11)
   python ua_admin.py                                                                # oblasts, raions, hromadas, settlements, quarters
 fi

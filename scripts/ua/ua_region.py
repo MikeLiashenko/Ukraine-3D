@@ -411,6 +411,33 @@ def grid_heights(Pj, sample, x0, y0, dx, nx, ny, raw=False):
     return h if raw else np.maximum(h, 0)
 
 
+def sea_mask(Pj, ox0, oy0, ox1, oy1, LD, lnx, lny, hl, px):
+    """The sea from the OSM coastline: the coastline and the extent's edge cut the area into faces; a face is sea when most of it
+    lies at 0 m in the DEM (the DEM alone is off by 100-300 m along steep coasts). None when no coastline crosses the extent."""
+    p = os.path.join(DU, 'coast.pkl')
+    if not os.path.exists(p): return None
+    from shapely.ops import polygonize
+    B = box(ox0, oy0, ox1, oy1); lines = []
+    for c in pickle.load(open(p, 'rb')):
+        l = LineString(Pj.arr(c))
+        if l.intersects(B): lines.append(l.intersection(B))
+    if not lines: return None
+    faces = list(polygonize(unary_union(lines + [B.boundary])))
+    sea = np.zeros((lny, lnx), bool); found = False
+    for f in faces:
+        fx0, fy0, fx1, fy1 = f.bounds                                   # draw each face only inside its own pixel box
+        c0, r0 = max(0, int((fx0 - ox0) / LD) - 1), max(0, int((oy1 - fy1) / LD) - 1)
+        c1, r1 = min(lnx, int((fx1 - ox0) / LD) + 2), min(lny, int((oy1 - fy0) / LD) + 2)
+        if c1 <= c0 or r1 <= r0: continue
+        m = Image.new('L', (c1 - c0, r1 - r0), 0); d = ImageDraw.Draw(m)
+        loc = lambda q: (px(q)[0] - c0, px(q)[1] - r0)
+        d.polygon([loc(q) for q in f.exterior.coords], fill=255)
+        for h in f.interiors: d.polygon([loc(q) for q in h.coords], fill=0)
+        mm = np.asarray(m) > 0
+        if mm.sum() and (hl[r0:r1, c0:c1][mm] < 0.02).mean() > 0.6: sea[r0:r1, c0:c1] |= mm; found = True
+    return sea if found else None
+
+
 # ------------------------------------------------------------------ land cover (100 m), palette index per pixel
 LC = ['field', 'meadow', 'wood', 'scrub', 'water', 'resid', 'hard', 'park', 'garden', 'cemetery', 'dirt', 'orchard', 'wetland', 'outside']
 LCI = {k: i for i, k in enumerate(LC)}
@@ -637,7 +664,10 @@ def main():
     a = np.array(im); a[np.asarray(mask) == 0] = LCI['outside']
     # the sea (no polygons in OSM, only a coastline; the oblast border runs out into territorial waters): wherever the relief is below sea level
     hl = grid_heights(Pj, sample, ox0, oy1 - (lny - 1) * LD, LD, lnx, lny, raw=True)[::-1]
-    a[(hl < 0.02) & (np.asarray(land) == 0)] = LCI['water']          # the DEM is exactly 0 over the sea (no depths); mapped land stays land
+    sea = sea_mask(Pj, ox0, oy0, ox1, oy1, LD, lnx, lny, hl, px)
+    if sea is None:   # no closed coastline here: the DEM is exactly 0 over the sea (no depths); mapped land stays land
+        sea = (hl < 0.02) & (np.asarray(land) == 0)
+    a[sea] = LCI['water']
     im = Image.fromarray(a, 'P'); im.putpalette(sum([[i * 16, i * 16, i * 16] for i in range(16)], []))
     im.save(os.path.join(out, 'lc.png'), optimize=True)
 

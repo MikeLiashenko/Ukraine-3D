@@ -18,6 +18,7 @@ Data © OpenStreetMap contributors (ODbL). Relief: AWS Terrain Tiles (terrarium;
 scripts/ua/            the Ukraine pipeline
   ua_extract.py        one pass over ukraine-latest.osm.pbf (pyosmium) -> data_ua/bins/*.pkl, 0.2° spatial bins
   fetch_dem_ua.py      terrarium z11 relief tiles for Ukraine -> data_ua/dem11/
+  ua_coast.py          the OSM coastline -> data_ua/coast.pkl (the sea is cut along it)
   ua_admin.py          oblasts, raions, hromadas, settlements, quarters -> data_ua/oblasts.json, admin_sel.pkl
   ua_region.py <slug>  one oblast -> web_ua/<slug>/: region.json, tiles + overview + addresses + 50 m relief in 12 km packs,
                        400 m relief (dem.bin.wasm), 100 m land cover (lc.png)
