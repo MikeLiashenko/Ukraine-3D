@@ -5,6 +5,10 @@
 // A 3D model of the weapon flies at its altitude over the buildings, with its track, the way ahead and the ring of
 // where it may be; the camera rides along (orbit around it freely). When it crosses into another oblast the page
 // hands over to that oblast's viewer.
+// thick lines: plain WebGL lines are always 1 px, too thin to see over a busy city
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 const WAF = (() => {
   const Q = new URLSearchParams(location.search);
   const num = (k) => { const v = parseFloat(Q.get(k)); return isFinite(v) ? v : null; };
@@ -153,11 +157,18 @@ const WAF = (() => {
     glow.renderOrder = 60; root.add(glow);
     beam.material.color.set(color); ring.material.color.set(color); trail.material.color.set(color); ahead.material.color.set(color); unc.material.color.set(color);
   }
-  const lineOf = (n, m) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setDrawRange(0, 0); const l = new THREE.Line(g, m); l.frustumCulled = false; l.renderOrder = 55; return l; };
-  const beam = lineOf(2, new THREE.LineBasicMaterial({ transparent: true, opacity: 0.55, fog: false, depthWrite: false }));
-  const trail = lineOf(600, new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, fog: false, depthWrite: false }));
-  const ahead = lineOf(64, new THREE.LineDashedMaterial({ transparent: true, opacity: 0.75, dashSize: 60, gapSize: 45, fog: false, depthWrite: false }));
-  const unc = lineOf(97, new THREE.LineBasicMaterial({ transparent: true, opacity: 0.6, fog: false, depthWrite: false }));
+  // n points at most; width in CSS px. The buffers are made once and rewritten in place (no new GPU buffers per update).
+  const lineOf = (n, width, o) => {
+    const g = new LineGeometry(); g.setPositions(new Float32Array(n * 3)); g.instanceCount = 0;
+    const m = new LineMaterial({ linewidth: width, transparent: true, depthWrite: false, ...o });
+    const l = new Line2(g, m); l.frustumCulled = false; l.renderOrder = 55; l.userData.w = width;
+    if (o.dashed) l.computeLineDistances();
+    return l;
+  };
+  const beam = lineOf(2, 2, { opacity: 0.6 });
+  const trail = lineOf(600, 4, { opacity: 0.9 });
+  const ahead = lineOf(64, 3.5, { opacity: 0.85, dashed: true, dashSize: 60, gapSize: 45 });
+  const unc = lineOf(97, 2.5, { opacity: 0.6 });
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.78, 1, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.6, depthWrite: false, fog: false, side: THREE.DoubleSide }));
   ring.renderOrder = 54; root.add(beam, trail, ahead, unc, ring);
 
@@ -235,20 +246,25 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
   }
   // ---- trail: where it has been (the channel's reports first, then what we flew)
   let trailN = 0, trailSeeded = false, trailAt = 0, arcTrail = false;
+  const trailPts = [];
   function trailPush(v) {
-    const a = trail.geometry.attributes.position;
-    if (trailN >= 600) { a.array.copyWithin(0, 3); trailN = 599; }
-    a.array[trailN * 3] = v.x; a.array[trailN * 3 + 1] = v.y; a.array[trailN * 3 + 2] = v.z; trailN++;
-    a.needsUpdate = true; trail.geometry.setDrawRange(0, trailN);
+    trailPts.push([v.x, v.y, v.z]); if (trailPts.length > 600) trailPts.shift();
+    trailN = trailPts.length; setLine(trail, trailPts);
   }
   function seedTrail(pts) {
     trailSeeded = true; const a0 = altOf(T, {}).alt;
     for (const p of pts) { if (!Array.isArray(p) || !isFinite(p[0]) || !isFinite(p[1])) continue; const [x, y] = xyOf(p[0], p[1]); trailPush(new THREE.Vector3(x, groundY(x, y) + a0, -y)); }
   }
   function setLine(l, pts) {
-    const a = l.geometry.attributes.position, n = Math.min(pts.length, a.count);
-    for (let i = 0; i < n; i++) a.array.set(pts[i], i * 3);
-    a.needsUpdate = true; l.geometry.setDrawRange(0, n); if (l.material.isLineDashedMaterial) l.computeLineDistances();
+    const g = l.geometry, buf = g.attributes.instanceStart.data, a = buf.array, n = Math.min(pts.length, a.length / 6 + 1);
+    for (let i = 0; i + 1 < n; i++) { a.set(pts[i], i * 6); a.set(pts[i + 1], i * 6 + 3); }
+    buf.needsUpdate = true; g.instanceCount = Math.max(0, n - 1);
+    if (l.material.dashed) {
+      const db = g.attributes.instanceDistanceStart.data, d = db.array; let s = 0;
+      for (let i = 0; i + 1 < n; i++) { d[i * 2] = s; s += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1], pts[i + 1][2] - pts[i][2]); d[i * 2 + 1] = s; }
+      db.needsUpdate = true;
+    }
+    l.material.linewidth = l.userData.w * renderer.getPixelRatio();   // the line shader works in device pixels
   }
   // ---- camera: rides along with the target, keeping the angle and distance the viewer chose
   let interacting = false, lastT = new THREE.Vector3();
@@ -325,7 +341,7 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
     const gy = groundY(cur.x, -cur.z);
     setLine(beam, [[cur.x, gy, cur.z], [cur.x, cur.y, cur.z]]);
     const rr = Math.max(20, dist * 0.03) * (1 + 0.25 * ((now / 1400) % 1)); ring.position.set(cur.x, gy + 1.5, cur.z); ring.scale.setScalar(rr); ring.material.opacity = 0.65 * (1 - (now / 1400) % 1) + 0.15;
-    if (!arcTrail && now - trailAt > 1500) { trailAt = now; const a = trail.geometry.attributes.position.array, n = trailN; if (!n || Math.hypot(a[n * 3 - 3] - cur.x, a[n * 3 - 1] - cur.z) > 8) trailPush(cur.clone()); }
+    if (!arcTrail && now - trailAt > 1500) { trailAt = now; const n = trailN; if (!n || Math.hypot(trailPts[n - 1][0] - cur.x, trailPts[n - 1][2] - cur.z) > 8) trailPush(cur.clone()); }
     if (now - aheadAt > 1000) {
       aheadAt = now; const pts = [[cur.x, cur.y, cur.z]];
       const pr = mode === 'push' && P ? P.progress : M && M.p, dk = mode === 'push' && P ? P.distKm : M && M.distKm, aw = (M && M.ahead) || [];
