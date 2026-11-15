@@ -320,7 +320,7 @@ const upNormals = (n) => { const a = new Float32Array(n * 3); for (let i = 1; i 
 const loader = new THREE.TextureLoader();
 const loadTex = (url) => new Promise((res, rej) => loader.load(url, res, undefined, rej));
 
-const VER = '2611151124';                                  // build stamp: data files are re-fetched after every rebuild
+const VER = '2611151153';                                  // build stamp: data files are re-fetched after every rebuild
 msg('завантаження області…');
 const [REG, COMMON, commonRaw, demRaw, lcImg] = await Promise.all([fetch(`region.json?v=${VER}`).then((r) => r.json()), fetch('common.json').then((r) => r.json()),
   loadBin('common.bin.wasm'), loadBin(`dem.bin.wasm?v=${VER}`),
@@ -2128,6 +2128,7 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const WAF = (() => {
   const Q = new URLSearchParams(location.search);
   const num = (k) => { const v = parseFloat(Q.get(k)); return isFinite(v) ? v : null; };
@@ -2192,7 +2193,7 @@ const WAF = (() => {
 
   // ---- 3D models, metres, nose along +Z, up +Y
   const COL = { shahed: 0xff5a36, missile: 0xff2d55, balist: 0xff3b30, kab: 0xffb020, fpv: 0x2dd4bf, banderol: 0xff6ec7, avia: 0x6aa7ff, other: 0xff5a36 };
-  const LEN = { shahed: 3.5, missile: 7, balist: 7.3, kab: 4, fpv: 1.2, banderol: 3.2, avia: 23, other: 3 };
+  const LEN = { shahed: 3.5, missile: 7, balist: 7.3, kab: 4, fpv: 0.6, banderol: 3.2, avia: 23, other: 3 };
   const mat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.25, fog: false, ...o });
   const along_z = (g) => g.rotateX(Math.PI / 2);
   function mesh(geo, m, x = 0, y = 0, z = 0) { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); return o; }
@@ -2231,7 +2232,10 @@ const WAF = (() => {
       const m = mat(0xdcdad0), d = mat(0x2e3236);
       g.add(body(0.46, 6.0, m, 0.75)); g.add(mesh(along_z(new THREE.CylinderGeometry(0.47, 0.47, 0.5, 18)), d, 0, 0, 1.6));
       g.add(fins(4, 0.46, -2.6, 0.55, 0.8, d));
-      g.add(mesh(new THREE.ConeGeometry(0.5, 2.6, 14).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffb35a, transparent: true, opacity: 0.85, fog: false }), 0, 0, -4.3));
+      for (const [r, l, c, op] of [[0.34, 4.2, 0xff8a2a, 0.45], [0.2, 2.4, 0xfff0c0, 0.9]]) {
+        const f = mesh(new THREE.ConeGeometry(r, l, 18).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }), 0, 0, -3.8 - l / 2);
+        f.userData.keep = true; f.renderOrder = 58; g.add(f);
+      }
     } else if (cat === 'kab') {
       const m = mat(0x5a6448), d = mat(0x2f3527);
       g.add(body(0.25, 3.2, m, 0.6)); g.add(fins(4, 0.25, -1.45, 0.35, 0.45, d));
@@ -2252,6 +2256,23 @@ const WAF = (() => {
     } else g.add(mesh(new THREE.IcosahedronGeometry(1, 1), mat(0xff5a36, { emissive: 0xff3a1a, emissiveIntensity: 1 })));
     g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; } });
     return g;
+  }
+  // Detailed models (Blender, scripts/models/build_models.py), one GLB per kind, shared by all the oblast pages. Until one has
+  // loaded (or if it can't) the simple model above stands in. Objects named prop* spin about the flight axis, propv* (rotors) about up.
+  const MODELS = /github\.io$/.test(location.hostname) ? '/Ukraine-3D/models/' : '../models/', MVER = 1;
+  const GLB = { shahed: 'shahed', missile: 'kh101', banderol: 'banderol', balist: 'iskander', kab: 'kab', fpv: 'fpv', avia: 'su35' }, glbs = {};
+  function glb(c, jet) {
+    const f = c === 'shahed' && jet ? 'geran3' : GLB[c]; if (!f) return Promise.resolve(null);
+    return glbs[f] || (glbs[f] = new Promise((res) => new GLTFLoader().load(`${MODELS}${f}.glb?v=${MVER}`, (g) => {
+      g.scene.traverse((o) => {
+        if (/^propv/.test(o.name)) o.userData.spin = 'y'; else if (/^prop/.test(o.name)) o.userData.spin = 'z';
+        if (!o.isMesh) return;
+        o.frustumCulled = false; o.castShadow = o.receiveShadow = false;
+        const m = o.material; m.fog = false;
+        if (m.name === 'glow') { m.emissive.setHex(0xff7a2a); m.emissiveIntensity = 2.5; }
+      });
+      res(g.scene);
+    }, undefined, (e) => { console.warn('WarAlarm model', f, e); res(null); })));
   }
   function glowTex(c) {
     const cv = document.createElement('canvas'); cv.width = cv.height = 128; const x = cv.getContext('2d'), col = new THREE.Color(c);
@@ -2376,6 +2397,7 @@ void main() {`)
     renderer.shadowMap.needsUpdate = true;
     clearTimeout(setHour.t);
     if (envRT) envRT.dispose(); envRT = pmrem.fromScene(envScene); scene.environment = envRT.texture; scene.environmentIntensity = 0.28 * (0.25 + 0.75 * (1 - dark));
+    fx.environment = envRT.texture; fx.environmentIntensity = 0.7 * (0.2 + 0.8 * (1 - dark));
     fogFromSky(); invalidate();
   }
   // ---- street lamps (gen.js places them along the streets): poles by day; at night a lit head, a pool of light on the
@@ -2435,6 +2457,8 @@ void main() {`)
     const key = `${c}|${jet}`; if (key === cat) return; cat = key;
     if (ship) root.remove(ship); if (glow) root.remove(glow);
     color = COL[c] || COL.other; ship = model(c, jet); root.add(ship);
+    const want = ship;
+    glb(c, jet).then((sc) => { if (!sc || ship !== want) return; for (const o of [...ship.children]) if (!o.userData.keep) ship.remove(o); ship.add(sc.clone()); invalidate(); });
     glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(color), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: true, transparent: true, opacity: 0.7, fog: false }));
     glow.renderOrder = 60; root.add(glow);
     beam.material.color.set(color); ring.material.color.set(color); trail.material.color.set(color); ahead.material.color.set(color); unc.material.color.set(color);
@@ -2618,7 +2642,7 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
     const dist = camera.position.distanceTo(cur), L = LEN[c] || 3, s = realSize ? 1 : Math.max(1, dist * (c === 'fpv' ? 0.1 : 0.08) / L);
     ship.position.copy(cur); ship.rotation.set(pitchCur, Math.PI - hdgCur, 0, 'YXZ'); ship.scale.setScalar(s);
     if (c === 'shahed' || c === 'avia') ship.rotation.z = Math.sin(now / 900) * 0.05;     // a little roll: it is flying
-    ship.traverse((o) => { if (o.userData.prop) o.rotation.z += dt * 40; });
+    ship.traverse((o) => { if (o.userData.prop) o.rotation.z += dt * 40; else if (o.userData.spin === 'z') o.rotation.z += dt * 55; else if (o.userData.spin === 'y') o.rotation.y += dt * 70; });
     glow.position.copy(cur); glow.scale.setScalar(Math.max(L * s * 2.2, dist * 0.05)); glow.material.opacity = gone ? 0.15 : 0.55 + 0.2 * Math.sin(now / 260);
     const gy = groundY(cur.x, -cur.z);
     setLine(beam, [[cur.x, gy, cur.z], [cur.x, cur.y, cur.z]]);
