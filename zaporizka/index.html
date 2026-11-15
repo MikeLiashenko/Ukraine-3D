@@ -320,7 +320,7 @@ const upNormals = (n) => { const a = new Float32Array(n * 3); for (let i = 1; i 
 const loader = new THREE.TextureLoader();
 const loadTex = (url) => new Promise((res, rej) => loader.load(url, res, undefined, rej));
 
-const VER = '2611151042';                                  // build stamp: data files are re-fetched after every rebuild
+const VER = '2611151048';                                  // build stamp: data files are re-fetched after every rebuild
 msg('завантаження області…');
 const [REG, COMMON, commonRaw, demRaw, lcImg] = await Promise.all([fetch(`region.json?v=${VER}`).then((r) => r.json()), fetch('common.json').then((r) => r.json()),
   loadBin('common.bin.wasm'), loadBin(`dem.bin.wasm?v=${VER}`),
@@ -2352,7 +2352,7 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
     return { hdg: (hdg || 0) * D2R, pitch };
   }
   // ---- trail: where it has been (the channel's reports first, then what we flew)
-  let trailN = 0, trailSeeded = false, trailAt = 0;
+  let trailN = 0, trailSeeded = false, trailAt = 0, arcTrail = false;
   function trailPush(v) {
     const a = trail.geometry.attributes.position;
     if (trailN >= 600) { a.array.copyWithin(0, 3); trailN = 599; }
@@ -2404,7 +2404,16 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
     setTimeout(() => location.replace(`${url}?${q.toString()}`), 900);
   }
   // fog follows the camera's height over the ground too, not only the orbit distance: a drone at 1-2 km must not fly in milk
-  { const fit0 = fitRange; fitRange = () => { fit0(); const h = camera.position.y - groundY(camera.position.x, -camera.position.z); if (h > 300) { scene.fog.near = Math.max(scene.fog.near, h * 2.2); scene.fog.far = Math.max(scene.fog.far, h * 7 + 4000); } }; }
+  { const fit0 = fitRange; fitRange = () => { fit0(); const h = camera.position.y - groundY(camera.position.x, -camera.position.z); if (h > 300) {
+    scene.fog.near = Math.max(scene.fog.near, h * 2.2); scene.fog.far = Math.max(scene.fog.far, h * 7 + 4000);
+    // a ballistic missile is 10-60 km up while the camera stays ~0.5 km from it: with the near plane sized for that 0.5 km
+    // the far-away ground has no depth precision left and its layers z-fight in stripes. Size near and the layer offsets
+    // by the height too (near stays well short of the target).
+    const d = Math.max(camDist(), h), near = Math.min(THREE.MathUtils.clamp(d * 0.008, 1.5, 3000), camDist() * 0.25);
+    if (Math.abs(near - camera.near) / camera.near > 0.1) { camera.near = near; camera.updateProjectionMatrix(); }
+    const po = -Math.max(3, d * 0.0025), fo = -Math.max(1, d * 0.0009);
+    for (const m of PRE) m.position.y = po; for (const m of FIN) m.position.y = fo;
+  } }; }
   // inside a WebView (the WarAlarm app on Windows: WebView2) the page can change size or pixel ratio without a
   // resize event; the canvas then stays a quarter of the window. Keep it in step with the window.
   setInterval(() => {
@@ -2434,10 +2443,24 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
     const gy = groundY(cur.x, -cur.z);
     setLine(beam, [[cur.x, gy, cur.z], [cur.x, cur.y, cur.z]]);
     const rr = Math.max(20, dist * 0.03) * (1 + 0.25 * ((now / 1400) % 1)); ring.position.set(cur.x, gy + 1.5, cur.z); ring.scale.setScalar(rr); ring.material.opacity = 0.65 * (1 - (now / 1400) % 1) + 0.15;
-    if (now - trailAt > 1500) { trailAt = now; const a = trail.geometry.attributes.position.array, n = trailN; if (!n || Math.hypot(a[n * 3 - 3] - cur.x, a[n * 3 - 1] - cur.z) > 8) trailPush(cur.clone()); }
+    if (!arcTrail && now - trailAt > 1500) { trailAt = now; const a = trail.geometry.attributes.position.array, n = trailN; if (!n || Math.hypot(a[n * 3 - 3] - cur.x, a[n * 3 - 1] - cur.z) > 8) trailPush(cur.clone()); }
     if (now - aheadAt > 1000) {
       aheadAt = now; const pts = [[cur.x, cur.y, cur.z]];
-      for (const p of (M && M.ahead) || []) { if (pts.length >= 64) break; const [x, y] = xyOf(p[0], p[1]); pts.push([x, groundY(x, y) + altNow, -y]); }
+      const pr = mode === 'push' && P ? P.progress : M && M.p, dk = mode === 'push' && P ? P.distKm : M && M.distKm, aw = (M && M.ahead) || [];
+      if ((T.cat === 'balist' || T.cat === 'kab') && pr != null && pr < 1 && dk > 0 && aw.length) {
+        // ballistic / КАБ: the rest of the arc, down to where it falls
+        const [tx, ty] = xyOf(aw[aw.length - 1][0], aw[aw.length - 1][1]);
+        for (let i = 1; i <= 40; i++) {
+          const f = i / 40, q = pr + (1 - pr) * f, x = cur.x + (tx - cur.x) * f, y = -cur.z + (ty + cur.z) * f;
+          pts.push([x, groundY(x, y) + altOf(T, { p: q, distKm: dk }).alt, -y]);
+        }
+        // ...and the flown part as the trail, from the launch point (the ground track is a straight line from→to)
+        if (pr > 0.002) {
+          const k = pr / (1 - pr), fx = cur.x - (tx - cur.x) * k, fy = -cur.z - (ty + cur.z) * k, past = [];
+          for (let i = 0; i <= 40; i++) { const q = pr * i / 40, x = fx + (tx - fx) * q, y = fy + (ty - fy) * q; past.push([x, groundY(x, y) + altOf(T, { p: q, distKm: dk }).alt, -y]); }
+          past.push([cur.x, cur.y, cur.z]); setLine(trail, past); arcTrail = true;
+        }
+      } else for (const p of aw) { if (pts.length >= 64) break; const [x, y] = xyOf(p[0], p[1]); pts.push([x, groundY(x, y) + altNow, -y]); }
       setLine(ahead, pts.length > 1 ? pts : []); ahead.material.dashSize = Math.max(40, dist * 0.02); ahead.material.gapSize = ahead.material.dashSize * 0.7;
     }
     if (now - uncAt > 2000) {
