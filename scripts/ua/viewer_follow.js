@@ -287,6 +287,13 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
   }
   // fog follows the camera's height over the ground too, not only the orbit distance: a drone at 1-2 km must not fly in milk
   { const fit0 = fitRange; fitRange = () => { fit0(); const h = camera.position.y - groundY(camera.position.x, -camera.position.z); if (h > 300) { scene.fog.near = Math.max(scene.fog.near, h * 2.2); scene.fog.far = Math.max(scene.fog.far, h * 7 + 4000); } }; }
+  // inside a WebView (the WarAlarm app on Windows: WebView2) the page can change size or pixel ratio without a
+  // resize event; the canvas then stays a quarter of the window. Keep it in step with the window.
+  setInterval(() => {
+    const pr = Math.min(devicePixelRatio, MOBILE ? 1.5 : 2), c = renderer.domElement;
+    if (Math.abs(renderer.getPixelRatio() - pr) > 0.01) { renderer.setPixelRatio(pr); if (composer) composer.setPixelRatio(pr); dispatchEvent(new Event('resize')); }
+    else if (Math.abs(c.clientWidth - innerWidth) > 1 || Math.abs(c.clientHeight - innerHeight) > 1) dispatchEvent(new Event('resize'));
+  }, 500);
   // ---- every frame
   let lastFrame = 0, odd = false, uncAt = 0, uiAt = 0, aheadAt = 0;
   function tick(now) {
