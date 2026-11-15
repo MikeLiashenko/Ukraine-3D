@@ -25,6 +25,11 @@ Inside the WarAlarm app the app pushes the exact position itself: `window.WA.pus
 The follow view runs on real time: the sun where it is now over the target; after dusk a night sky with stars,
 soft moonlight and lit windows (more in the evening, few deep in the night; warm, neutral and LED light, TVs, curtains).
 `&at=2026-11-15T21:30:00%2B02:00` starts the clock at another moment, for testing.
+The weapon models are built in Blender at real proportions (Shahed-136, the jet Geran-3, Kh-101, Banderol, Iskander,
+a FAB with the UMPK glide kit, an FPV quad with an RPG warhead, a Flanker-type jet): `scripts/models/build_models.py`
+(`blender -b -P build_models.py -- web_ua/models [preview_dir]`) writes one GLB per kind to `web_ua/models/`; they are
+published once on gh-pages A (`/Ukraine-3D/models/`) and every oblast page loads them from there (a simple stand-in
+shows until one has loaded). Bump `MVER` in `viewer_follow.js` when the models change.
 
 ## Layout
 

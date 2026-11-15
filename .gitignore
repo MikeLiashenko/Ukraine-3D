@@ -4,3 +4,4 @@ __pycache__/
 data_ua/
 web/
 web_ua/*/
+!web_ua/models/
