@@ -1371,6 +1371,7 @@ function genCars(S, seed) {
 }
 
 // ---------------------------------------------------------------------------- ground (groundgen port)
+const MAJOR_LAMP = ['motorway', 'trunk', 'primary', 'primary_link', 'secondary', 'secondary_link'];
 const ROAD_Z = { footway: 0.020, path: 0.018, steps: 0.022, track: 0.018, cycleway: 0.02, pedestrian: 0.026, service: 0.032, unclassified: 0.036,
   residential: 0.038, living_street: 0.036, tertiary: 0.044, secondary: 0.048, secondary_link: 0.046, primary: 0.052, primary_link: 0.050 };
 const MAJOR = ['primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary'];
@@ -2035,6 +2036,33 @@ function generateTile(buf, opts = {}) {
   const ca = [];
   for (const c of cars) ca.push(c[0] + ox, c[1] + oy, c[2], c[4], c[3][0], c[3][1], c[3][2]);
   out.cars = new Float32Array(ca);
+  // street lamps (OSM rarely maps them): along streets, a pole every ~30-40 m a metre off the kerb, on one side of
+  // ordinary streets and on both sides of wide ones. [x, y, angle toward the road, kind 0 LED / 1 sodium, on 0/1]
+  {
+    const LAMP = { motorway: 42, trunk: 36, primary: 32, primary_link: 34, secondary: 32, secondary_link: 34, tertiary: 34, tertiary_link: 36,
+      residential: 36, unclassified: 40, living_street: 30, pedestrian: 28 };
+    const [lx0, ly0, lx1, ly1] = S.H.bbox, lp = [];
+    for (const rd of S.roads) {
+      const sp = LAMP[rd.kind]; if (!sp || rd.tunnel || rd.bridge || rd.pts.length < 2) continue;
+      const r = rng(hstr(String(rd.id)) + 77), both = rd.width >= 11, off = rd.width / 2 + 1.1;
+      const side0 = r() < 0.5 ? 1 : -1, sodium = r() < (MAJOR_LAMP.includes(rd.kind) ? 0.3 : 0.55) ? 1 : 0;
+      let acc = sp * (0.3 + 0.4 * r());
+      for (let i = 1; i < rd.pts.length; i++) {
+        const a = rd.pts[i - 1], c = rd.pts[i], L = Math.hypot(c[0] - a[0], c[1] - a[1]);
+        if (L < 0.01) continue;
+        const ux = (c[0] - a[0]) / L, uy = (c[1] - a[1]) / L, nx = -uy, ny = ux;
+        for (; acc <= L; acc += sp) {
+          for (const sd of both ? [side0, -side0] : [side0]) {
+            const x = a[0] + ux * acc + nx * off * sd + ox, y = a[1] + uy * acc + ny * off * sd + oy;
+            if (x < lx0 || x >= lx1 || y < ly0 || y >= ly1) continue;
+            lp.push(x, y, Math.atan2(-ny * sd, -nx * sd), sodium, r() < 0.9 ? 1 : 0);
+          }
+        }
+        acc -= L;
+      }
+    }
+    out.lamps = new Float32Array(lp);
+  }
   // ground
   const g = new Ground(), props = new Sink(0);
   const junc = junctions(S);
