@@ -144,7 +144,119 @@ const WAF = (() => {
   // ---- scene objects
   // drawn as an overlay after the frame (post-processing included): the AO pass would smear dark halos around a model in the air
   const root = new THREE.Group(), fx = new THREE.Scene(); fx.add(root);
-  { fx.add(new THREE.HemisphereLight(0xdfe8f5, 0x55604a, 1.2)); const l = new THREE.DirectionalLight(0xfff1df, 2.4); l.position.set(0.5, 1, 0.35); fx.add(l); }
+  const fxHemi = new THREE.HemisphereLight(0xdfe8f5, 0x55604a, 1.2), fxSun = new THREE.DirectionalLight(0xfff1df, 2.4);
+  fxSun.position.set(0.5, 1, 0.35); fx.add(fxHemi, fxSun);
+
+  // ---- real time: the sun where it is now; after dusk moonlight, a dark sky and lit windows
+  // (?at=2026-11-15T22:30:00%2B02:00 starts the clock at another moment, for testing)
+  const AT = Q.get('at'), clockOff = AT && isFinite(Date.parse(AT)) ? Date.parse(AT) - Date.now() : 0;
+  const nowDate = () => new Date(Date.now() + clockOff);
+  function sunAt(date, lat, lon) {                     // degrees: elevation, azimuth from north clockwise (accurate to ~0.5°)
+    const d = date.getTime() / 86400000 - 10957.5, g = (357.529 + 0.98560028 * d) * D2R, q = 280.459 + 0.98564736 * d;
+    const L = (q + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * D2R, e = (23.439 - 0.00000036 * d) * D2R;
+    const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L)), dec = Math.asin(Math.sin(e) * Math.sin(L));
+    const H = ((18.697374558 + 24.06570982441908 * d) * 15 + lon) * D2R - ra, la = lat * D2R;
+    const el = Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(H));
+    const az = Math.atan2(-Math.cos(dec) * Math.sin(H), Math.sin(dec) * Math.cos(la) - Math.cos(dec) * Math.cos(H) * Math.sin(la));
+    return { elev: el / D2R, az: ((az / D2R) % 360 + 360) % 360 };
+  }
+  function kyivHour(date) {
+    try { const [h, m] = date.toLocaleTimeString('en-GB', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit', hour12: false }).split(':').map(Number); return (h % 24) + m / 60; }
+    catch (e) { return date.getHours() + date.getMinutes() / 60; }
+  }
+  // share of windows lit by the local hour: most in the evening, few deep in the night, some again before work
+  const LIT = [0.17, 0.12, 0.08, 0.06, 0.06, 0.10, 0.22, 0.30, 0.22, 0.12, 0.10, 0.10, 0.10, 0.10, 0.10, 0.12, 0.20, 0.32, 0.44, 0.50, 0.52, 0.47, 0.38, 0.26, 0.17];
+  const litAt = (h) => { const i = Math.floor(h) % 24, f = h - Math.floor(h); return LIT[i] + (LIT[i + 1] - LIT[i]) * f; };
+  const uNight = { value: 0 }, uLit = { value: 0.3 }, uClock = { value: 0 };
+  const NIGHT_GLSL = `
+uniform float uNight; uniform float uLit; uniform float uClock;
+float nh_(float x) { return fract(sin(x * 127.1 + 0.37) * 43758.5453); }
+// light from a window at night: q in metres from the pane's corner, w x h the pane, r the window's own random number
+// (the same one that chose its tulle, curtains or blinds), kind 1 = stairwell, > 3.5 = shop front
+vec3 nightGlow(vec2 q, float w, float h, float r, float kind, float glassMask) {
+  if (uNight < 0.001) return vec3(0.0);
+  float stair = step(0.5, kind) * step(kind, 1.5), shop = step(3.5, kind);
+  if (nh_(r * 91.7 + 3.1) > uLit * mix(1.0, 2.0, stair) * mix(1.0, 0.35, shop)) return vec3(0.0);
+  float tone = nh_(r * 53.3 + 7.7);
+  vec3 col = tone < 0.60 ? vec3(1.0, 0.50, 0.18) : tone < 0.88 ? vec3(1.0, 0.66, 0.36) : tone < 0.96 ? vec3(0.80, 0.84, 1.0) * 0.8 : vec3(0.40, 0.55, 1.0);
+  if (stair > 0.5) col = vec3(0.80, 0.86, 0.80) * 0.6;
+  float u = clamp(q.x / max(w, 0.01), 0.0, 1.0), v = clamp(q.y / max(h, 0.01), 0.0, 1.0);
+  float c = fract(r * 7.31), side = step(0.22, min(u, 1.0 - u)), m;
+  if (shop > 0.5) m = 0.8;
+  else if (c < 0.30) m = 0.8;
+  else if (c < 0.52) { m = mix(0.22, 1.0, side); col *= mix(vec3(1.0, 0.75, 0.55), vec3(1.0), side); }
+  else if (c < 0.62) m = 0.30 + 0.25 * step(0.5, fract(q.y * 18.0));
+  else m = 0.55 + 0.6 * v;
+  if (tone >= 0.96) m *= 0.7 + 0.3 * sin(uClock * (2.0 + 5.0 * nh_(r * 13.0)) + r * 40.0);
+  return col * (0.5 + 0.9 * nh_(r * 17.9 + 1.3)) * m * glassMask;
+}
+void main() {`;
+  // the building materials get the window light (their shaders compile when the first buildings come in, after this)
+  for (const [m, add] of [
+    [wallMat, 'float lodG = smoothstep(0.8, 2.2, fw); vec3 nGl = mix(nightGlow(hit - w0, w1.x - w0.x, w1.y - w0.y, r, isSt, gm) * onPane, nightGlow(P - w0, w1.x - w0.x, w1.y - w0.y, r, isSt, 0.75), lodW); totalEmissiveRadiance += uNight * (nGl * inWin * (1.0 - lodG) * 1.3 + lodG * area * uLit * vec3(1.0, 0.60, 0.30) * 0.22);'],
+    [winMat, 'totalEmissiveRadiance += uNight * (nightGlow(vW, vWp.x, vWp.y, floor(vWp.z * 1000.0 + 0.5) * 0.001, vWp.w, gm) * (1.0 - lod) * 1.3 + lod * uLit * vec3(1.0, 0.60, 0.30) * 0.8);'],
+  ]) {
+    const o = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, rr) => {
+      o(sh, rr);
+      Object.assign(sh.uniforms, { uNight, uLit, uClock });
+      sh.fragmentShader = sh.fragmentShader.replace('void main() {', NIGHT_GLSL)
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n' + add);
+    };
+    m.needsUpdate = true;
+  }
+  const dirOf = (e, a) => { e *= D2R; a *= D2R; return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)); };
+  const ss = THREE.MathUtils.smoothstep, lerpC = (c, a, b, k) => c.setRGB(a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k);
+  // night sky: three's Sky lifts its near-black night to a flat grey; past dusk it turns into a dark blue sky with stars
+  // and a faint warm glow of the city low over the horizon (the fog takes its colour from it too)
+  const uDark = { value: 0 };
+  for (const m of [sky.material, envSky.material]) {
+    m.uniforms.uDark = uDark;
+    m.fragmentShader = m.fragmentShader
+      .replace(/void main\(\)\s*\{/, `uniform float uDark;
+float sh_(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void main() {`)
+      .replace('gl_FragColor = vec4( retColor, 1.0 );', `if (uDark > 0.0) {
+        float hy = max(direction.y, 0.0);
+        vec3 nc = mix(vec3(0.016, 0.0125, 0.0115), vec3(0.0016, 0.0024, 0.0058), smoothstep(0.0, 0.35, hy));
+        vec2 sp = vec2(atan(direction.z, direction.x), asin(clamp(direction.y, -1.0, 1.0))) * 180.0;
+        vec2 cell = floor(sp), f = fract(sp) - 0.5 - (vec2(sh_(cell + 3.1), sh_(cell + 7.7)) - 0.5) * 0.4;
+        float star = step(0.992, sh_(cell)) * smoothstep(0.30, 0.0, length(f)) * smoothstep(0.03, 0.25, direction.y);
+        nc += vec3(0.85, 0.9, 1.0) * star * (0.03 + 0.12 * pow(sh_(cell + 1.7), 4.0));
+        retColor = mix(retColor, nc, uDark);
+      }
+      gl_FragColor = vec4( retColor, 1.0 );`);
+    m.needsUpdate = true;
+  }
+  let skyElev = 1e9;
+  function realSky(force) {
+    const now = nowDate(), { elev, az } = sunAt(now, T.lat, T.lon);
+    uLit.value = litAt(kyivHour(now));
+    if (!force && Math.abs(elev - skyElev) < 0.25) return;
+    skyElev = elev;
+    // sunUp: direct sunlight; dusk: civil twilight lit by the sky alone; dark: past nautical twilight, the moon
+    const sunUp = ss(elev, -1, 3), dark = 1 - ss(elev, -10, -3), warm = 1 - Math.min(1, Math.max(0, elev) / 30);
+    // the sky shows the sun where it really is; three's Sky goes black at -2.3°, so below the horizon its sun sinks slower
+    // (the afterglow lasts through civil twilight) and the night sky takes over from -5°
+    const sd = dirOf(elev > -1.5 ? elev : -1.5 + (elev + 1.5) * 0.15, az);
+    su.sunPosition.value.copy(sd); envSky.material.uniforms.sunPosition.value.copy(sd);
+    for (const k of ['turbidity', 'rayleigh', 'mieCoefficient', 'mieDirectionalG']) envSky.material.uniforms[k].value = su[k].value;
+    // the light: the sun while it is up, then the moon (a soft blue light from high on the other side)
+    const moon = elev < -4, ld = moon ? dirOf(38, az + 180) : dirOf(Math.max(2, elev), az);
+    sunU.value.copy(ld); sunDir.copy(ld); fitShadow();
+    lerpC(sun.color, [1, 0.93 - warm * 0.25, 0.85 - warm * 0.4], [0.55, 0.65, 1.0], moon ? 1 : 0);
+    sun.intensity = moon ? 0.18 * dark : (0.8 + 2.6 * Math.min(1, Math.max(0, elev) / 25)) * sunUp;
+    hemi.intensity = (0.12 + 0.16 * Math.min(1, Math.max(0, elev) / 30)) * sunUp + 0.45 * (1 - sunUp) * (1 - dark) + 0.07 * dark;
+    lerpC(hemi.color, [0.79, 0.86, 0.95], [0.45, 0.55, 0.80], 1 - sunUp); lerpC(hemi.groundColor, [0.34, 0.38, 0.29], [0.10, 0.11, 0.13], 1 - sunUp);
+    uNight.value = 1 - ss(elev, -7, 3); uDark.value = 1 - ss(elev, -12, -5);
+    renderer.toneMappingExposure = 1 + 0.7 * dark + 0.5 * (1 - sunUp) * (1 - dark);
+    fxHemi.intensity = 1.2 * (0.4 + 0.6 * (1 - dark)); fxSun.intensity = 2.4 * (0.3 + 0.7 * (1 - dark));
+    lerpC(fxSun.color, [1, 0.95, 0.87], [0.65, 0.72, 1.0], dark);
+    renderer.shadowMap.needsUpdate = true;
+    clearTimeout(setHour.t);
+    if (envRT) envRT.dispose(); envRT = pmrem.fromScene(envScene); scene.environment = envRT.texture; scene.environmentIntensity = 0.28 * (0.25 + 0.75 * (1 - dark));
+    fogFromSky(); invalidate();
+  }
   { const draw0 = draw; draw = () => { draw0(); const ac = renderer.autoClear; renderer.autoClear = false; renderer.clearDepth(); renderer.render(fx, camera); renderer.autoClear = ac; }; }
   let T = { id: ID, cat: Q.get('cat') || 'shahed', label: Q.get('label') || '', place: Q.get('place') || '', lat: LAT0, lon: LON0, heading: num('hdg'), hdgReal: num('hdg') !== null,
     kmh: num('kmh') || 0, alt: num('alt') || 0, seen: Date.now(), stage: '', stageLabel: '' };
@@ -325,7 +437,7 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
     requestAnimationFrame(tick);
     if (MOBILE && (odd = !odd)) return;                // ~30 fps on phones
     const dt = Math.min(0.25, (now - (lastFrame || now)) / 1000); lastFrame = now;
-    const wall = Date.now(), { hdg, pitch } = goalNow(wall);
+    const wall = Date.now(), { hdg, pitch } = goalNow(wall); uClock.value = now / 1000;
     if (!have || cur.distanceTo(goal) > 4000) { cur.copy(goal); hdgCur = hdg; pitchCur = pitch; have = true; trailAt = 0; }
     else {
       cur.lerp(goal, 1 - Math.exp(-dt * 2.2));
@@ -401,7 +513,9 @@ body.wa #districts, body.wa #brand, body.wa #search, body.wa #dock, body.wa #com
   return {
     on: true,
     get x() { return xyOf(T.lat, T.lon)[0]; }, get y() { return xyOf(T.lat, T.lon)[1]; },
-    start() {                                        // after the first pack is in: place the model and the camera, start flying
+    start() {
+      // after the first pack is in: place the model and the camera, start flying
+      realSky(true); setInterval(() => realSky(false), 30000);
       goalNow(Date.now()); cur.copy(goal); have = true; hdgCur = (T.heading || 0) * D2R;
       if (T.trail) seedTrail(T.trail);
       snapCam(T.cat === 'avia' ? 2500 : T.cat === 'fpv' ? 200 : 480);

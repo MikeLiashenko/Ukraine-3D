@@ -22,6 +22,9 @@ With `&id=<WarAlarm target id>` the oblast page follows a live target from the W
 and the ring of where it may be; the camera rides along; at an oblast border the page hands over to the next oblast.
 Inside the WarAlarm app the app pushes the exact position itself: `window.WA.push({lat, lon, hdg, kmh, cat, label, ...})`
 (or `postMessage({wa: 'target', ...})` from a parent frame). Code: `scripts/ua/viewer_follow.js`, router `scripts/ua/build_go.py`.
+The follow view runs on real time: the sun where it is now over the target; after dusk a night sky with stars,
+soft moonlight and lit windows (more in the evening, few deep in the night; warm, neutral and LED light, TVs, curtains).
+`&at=2026-11-15T21:30:00%2B02:00` starts the clock at another moment, for testing.
 
 ## Layout
 
